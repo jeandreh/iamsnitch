@@ -1,0 +1,16 @@
+version: "3"
+services:
+  default: &default
+    image: golang:1.16.6
+    volumes:
+    - .:/workdir
+    working_dir: /workdir
+    entrypoint: make
+
+  test:
+    <<: *default
+    command: test
+
+  build:
+    <<: *default
+    command: build

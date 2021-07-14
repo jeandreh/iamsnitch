@@ -2,3 +2,6 @@
 snitch.db
 .vscode
 .DS_Store
+mocks
+.cover.out
+bin

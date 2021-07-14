@@ -5,7 +5,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/iam/types"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/jeandreh/iam-snitch/pkg/internal/domain"
+	"github.com/jeandreh/iam-snitch/internal/domain"
 	"github.com/stretchr/testify/require"
 )
 
@@ -60,7 +60,7 @@ func TestBuildACL(t *testing.T) {
 					},
 					Permissions: []domain.Permission{
 						{
-							Action: "ec2:CreateInstance",
+							Action: domain.Action{ID: "ec2:CreateInstance"},
 							GrantChain: []domain.GrantIface{
 								domain.RoleGrant{
 									Grant: domain.Grant{
@@ -87,7 +87,7 @@ func TestBuildACL(t *testing.T) {
 					},
 					Permissions: []domain.Permission{
 						{
-							Action: "ec2:CreateInstance",
+							Action: domain.Action{ID: "ec2:CreateInstance"},
 							GrantChain: []domain.GrantIface{
 								domain.RoleGrant{
 									Grant: domain.Grant{

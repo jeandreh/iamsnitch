@@ -1,6 +1,6 @@
 package domain
 
 type Permission struct {
-	Action     string
+	Action     Action
 	GrantChain []GrantIface
 }
