@@ -1,6 +1,6 @@
 OS_LIST:=linux darwin
 
-all: test build
+all: build test
 
 test: generate
 	go test ./... -coverprofile .cover.out
@@ -13,7 +13,7 @@ generate: internal/mocks
 coverage: test
 	@go tool cover -html .cover.out
 
-build: test
+build: generate
 	@mkdir -p bin
 	$(foreach os, $(OS_LIST), \
 		$(shell GOARCH=amd64 GOOS=$(os) go build -o bin/iamsnitch-$(os)-amd64) \
