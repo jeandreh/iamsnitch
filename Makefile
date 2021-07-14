@@ -6,6 +6,7 @@ test: generate
 	go test ./... -coverprofile .cover.out
 
 internal/mocks:
+	go install github.com/golang/mock/mockgen@v1.6.0
 	go generate ./...
 
 generate: internal/mocks
