@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	"github.com/jeandreh/iam-snitch/internal/domain"
+	"github.com/jeandreh/iam-snitch/internal/domain/model"
 	"github.com/jeandreh/iam-snitch/internal/mocks"
 	"github.com/stretchr/testify/require"
 )
@@ -13,14 +13,14 @@ import (
 func TestRefreshACL(t *testing.T) {
 	tests := []struct {
 		name         string
-		want         []domain.AccessControlRule
+		want         []model.AccessControlRule
 		wantErrFetch error
 		wantErrSave  error
 		wantErr      error
 	}{
 		{
 			"success",
-			[]domain.AccessControlRule{},
+			[]model.AccessControlRule{},
 			nil,
 			nil,
 			nil,
@@ -34,7 +34,7 @@ func TestRefreshACL(t *testing.T) {
 		},
 		{
 			"error save",
-			[]domain.AccessControlRule{},
+			[]model.AccessControlRule{},
 			nil,
 			fmt.Errorf("save error"),
 			fmt.Errorf("save error"),
@@ -80,28 +80,40 @@ func TestRefreshACL(t *testing.T) {
 
 func TestWhoCan(t *testing.T) {
 	type args struct {
-		action   domain.Action
-		resource domain.Resource
+		actions   []string
+		resources []model.Resource
+		exact     bool
 	}
 	tests := []struct {
 		name    string
 		args    args
-		want    []domain.AccessControlRule
+		want    []model.AccessControlRule
 		wantErr error
 	}{
 		{
-			"success",
+			"globbed search",
 			args{
-				action: domain.Action{
-					ID: "someaction",
-				},
-				resource: domain.Resource{
-					ID: "resource",
+				actions:   []string{"someaction"},
+				resources: []model.Resource{{ID: "resource"}},
+				exact:     false,
+			},
+			[]model.AccessControlRule{
+				{
+					Principal: model.Principal{ID: "someprincipal"},
 				},
 			},
-			[]domain.AccessControlRule{
+			nil,
+		},
+		{
+			"exact search",
+			args{
+				actions:   []string{"someaction"},
+				resources: []model.Resource{{ID: "resource"}},
+				exact:     true,
+			},
+			[]model.AccessControlRule{
 				{
-					Principal: domain.Principal{ID: "someprincipal"},
+					Principal: model.Principal{ID: "someprincipal"},
 				},
 			},
 			nil,
@@ -109,12 +121,9 @@ func TestWhoCan(t *testing.T) {
 		{
 			"find error",
 			args{
-				action: domain.Action{
-					ID: "someaction",
-				},
-				resource: domain.Resource{
-					ID: "resource",
-				},
+				actions:   []string{"someaction"},
+				resources: []model.Resource{{ID: "resource"}},
+				exact:     false,
 			},
 			nil,
 			fmt.Errorf("find error"),
@@ -140,14 +149,15 @@ func TestWhoCan(t *testing.T) {
 
 			cacheMock.
 				EXPECT().
-				Find(gomock.Eq(&domain.Filter{
-					Actions:   []domain.Action{tt.args.action},
-					Resources: []domain.Resource{tt.args.resource},
+				Find(gomock.Eq(&model.Filter{
+					Actions:    tt.args.actions,
+					Resources:  tt.args.resources,
+					ExactMatch: tt.args.exact,
 				})).
 				Return(tt.want, tt.wantErr).
 				Times(1)
 
-			acl, err := a.WhoCan(tt.args.action, tt.args.resource)
+			acl, err := a.WhoCan(tt.args.actions, tt.args.resources, tt.args.exact)
 
 			require.Equal(t, tt.wantErr, err)
 			require.Equal(t, tt.want, acl)

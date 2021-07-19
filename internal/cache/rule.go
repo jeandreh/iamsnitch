@@ -1,42 +1,44 @@
 package cache
 
 import (
-	"github.com/jeandreh/iam-snitch/internal/domain"
+	"github.com/jeandreh/iam-snitch/internal/domain/model"
 	"gorm.io/gorm"
 )
 
 type AccessControlRule struct {
 	gorm.Model
-	RuleID      string
-	Principal   string
-	Permissions []Permission
-	Resource    string
+	RuleID     string
+	Principal  string
+	Permission string
+	Resource   string
+	GrantChain []Grant
 }
 
-func NewAccessControlRule(da *domain.AccessControlRule) *AccessControlRule {
+func NewAccessControlRule(da *model.AccessControlRule) *AccessControlRule {
 	return &AccessControlRule{
-		RuleID:      da.ID(),
-		Principal:   da.Principal.ID,
-		Permissions: mapPermissions(da.Permissions),
-		Resource:    da.Resource.ID,
+		RuleID:     da.ID(),
+		Principal:  da.Principal.ID,
+		Permission: da.Permission.ID,
+		Resource:   da.Resource.ID,
+		GrantChain: NewGrantChain(da.GrantChain),
 	}
 }
 
-func (a *AccessControlRule) Map() domain.AccessControlRule {
-	dacl := domain.AccessControlRule{
-		Principal: domain.Principal{ID: a.Principal},
-		Resource:  domain.Resource{ID: a.Resource},
+func (a *AccessControlRule) Map() model.AccessControlRule {
+	return model.AccessControlRule{
+		Principal: model.Principal{ID: a.Principal},
+		Permission: model.Permission{
+			ID: a.Permission,
+		},
+		Resource:   model.Resource{ID: a.Resource},
+		GrantChain: a.mapGrantChain(),
 	}
-	for _, p := range a.Permissions {
-		dacl.Permissions = append(dacl.Permissions, p.Map())
-	}
-	return dacl
 }
 
-func mapPermissions(dpl []domain.Permission) []Permission {
-	pl := make([]Permission, 0, 10)
-	for _, p := range dpl {
-		pl = append(pl, NewPermission(&p))
+func (a *AccessControlRule) mapGrantChain() []model.GrantIface {
+	var mg []model.GrantIface
+	for _, g := range a.GrantChain {
+		mg = append(mg, g.Map())
 	}
-	return pl
+	return mg
 }

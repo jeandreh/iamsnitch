@@ -5,7 +5,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/iam/types"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/jeandreh/iam-snitch/internal/domain"
+	"github.com/jeandreh/iam-snitch/internal/domain/model"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,10 +18,10 @@ func TestBuildACL(t *testing.T) {
 	tests := []struct {
 		name   string
 		fields fields
-		want   []domain.AccessControlRule
+		want   []model.AccessControlRule
 	}{
 		{
-			"single policy",
+			"single action",
 			fields{
 				types.Role{
 					Arn:      aws.String("arn:aws:iam::111122223333:role/SomeRole"),
@@ -53,59 +53,143 @@ func TestBuildACL(t *testing.T) {
 					},
 				},
 			},
-			[]domain.AccessControlRule{
+			[]model.AccessControlRule{
 				{
-					Principal: domain.Principal{
+					Principal: model.Principal{
 						ID: "AWS[arn:aws:iam::111122223333:role/TestRole]",
 					},
-					Permissions: []domain.Permission{
-						{
-							Action: domain.Action{ID: "ec2:CreateInstance"},
-							GrantChain: []domain.GrantIface{
-								domain.RoleGrant{
-									Grant: domain.Grant{
-										Type: "Role",
-										ID:   "arn:aws:iam::111122223333:role/SomeRole",
-									},
-								},
-								domain.PolicyGrant{
-									Grant: domain.Grant{
-										Type: "Policy",
-										ID:   "arn:aws:iam::111122223333:policy/TestPolicy",
-									},
-								},
+					Permission: model.Permission{
+						ID: "ec2:CreateInstance",
+					},
+					Resource: model.Resource{
+						ID: "arn:aws:ec2:*:*:instance/someinstanceid",
+					},
+					GrantChain: []model.GrantIface{
+						model.RoleGrant{
+							Grant: model.Grant{
+								Type: "Role",
+								ID:   "arn:aws:iam::111122223333:role/SomeRole",
 							},
 						},
-					},
-					Resource: domain.Resource{
-						ID: "arn:aws:ec2:*:*:instance/someinstanceid",
+						model.PolicyGrant{
+							Grant: model.Grant{
+								Type: "Policy",
+								ID:   "arn:aws:iam::111122223333:policy/TestPolicy",
+							},
+						},
 					},
 				},
 				{
-					Principal: domain.Principal{
+					Principal: model.Principal{
 						ID: "AWS[arn:aws:iam::111122223333:role/TestRole]",
 					},
-					Permissions: []domain.Permission{
-						{
-							Action: domain.Action{ID: "ec2:CreateInstance"},
-							GrantChain: []domain.GrantIface{
-								domain.RoleGrant{
-									Grant: domain.Grant{
-										Type: "Role",
-										ID:   "arn:aws:iam::111122223333:role/SomeRole",
+					Permission: model.Permission{
+						ID: "ec2:CreateInstance",
+					},
+					Resource: model.Resource{
+						ID: "arn:aws:ec2:*:*:instance/someotherinstance",
+					},
+					GrantChain: []model.GrantIface{
+						model.RoleGrant{
+							Grant: model.Grant{
+								Type: "Role",
+								ID:   "arn:aws:iam::111122223333:role/SomeRole",
+							},
+						},
+						model.PolicyGrant{
+							Grant: model.Grant{
+								Type: "Policy",
+								ID:   "arn:aws:iam::111122223333:policy/TestPolicy",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			"two actions",
+			fields{
+				types.Role{
+					Arn:      aws.String("arn:aws:iam::111122223333:role/SomeRole"),
+					RoleName: aws.String("SomeRole"),
+				},
+				[]Principal{
+					{
+						Type: AWS,
+						ID:   "arn:aws:iam::111122223333:role/TestRole",
+					},
+				},
+				[]IdentityPolicy{
+					{
+						ARN:  "arn:aws:iam::111122223333:policy/TestPolicy",
+						Name: "TestPolicy",
+						Policy: Policy{
+							Version: "2012-10-17",
+							Statements: []Statement{
+								{
+									Effect: "Allow",
+									Actions: []string{
+										"ec2:CreateInstance",
+										"ec2:DescribeInstance",
 									},
-								},
-								domain.PolicyGrant{
-									Grant: domain.Grant{
-										Type: "Policy",
-										ID:   "arn:aws:iam::111122223333:policy/TestPolicy",
+									Resources: []string{
+										"arn:aws:ec2:*:*:instance/someinstanceid",
 									},
 								},
 							},
 						},
 					},
-					Resource: domain.Resource{
-						ID: "arn:aws:ec2:*:*:instance/someotherinstance",
+				},
+			},
+			[]model.AccessControlRule{
+				{
+					Principal: model.Principal{
+						ID: "AWS[arn:aws:iam::111122223333:role/TestRole]",
+					},
+					Permission: model.Permission{
+						ID: "ec2:CreateInstance",
+					},
+					Resource: model.Resource{
+						ID: "arn:aws:ec2:*:*:instance/someinstanceid",
+					},
+					GrantChain: []model.GrantIface{
+						model.RoleGrant{
+							Grant: model.Grant{
+								Type: "Role",
+								ID:   "arn:aws:iam::111122223333:role/SomeRole",
+							},
+						},
+						model.PolicyGrant{
+							Grant: model.Grant{
+								Type: "Policy",
+								ID:   "arn:aws:iam::111122223333:policy/TestPolicy",
+							},
+						},
+					},
+				},
+				{
+					Principal: model.Principal{
+						ID: "AWS[arn:aws:iam::111122223333:role/TestRole]",
+					},
+					Permission: model.Permission{
+						ID: "ec2:DescribeInstance",
+					},
+					Resource: model.Resource{
+						ID: "arn:aws:ec2:*:*:instance/someinstanceid",
+					},
+					GrantChain: []model.GrantIface{
+						model.RoleGrant{
+							Grant: model.Grant{
+								Type: "Role",
+								ID:   "arn:aws:iam::111122223333:role/SomeRole",
+							},
+						},
+						model.PolicyGrant{
+							Grant: model.Grant{
+								Type: "Policy",
+								ID:   "arn:aws:iam::111122223333:policy/TestPolicy",
+							},
+						},
 					},
 				},
 			},

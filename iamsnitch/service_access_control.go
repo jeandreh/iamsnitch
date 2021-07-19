@@ -1,13 +1,16 @@
 package iamsnitch
 
-import "github.com/jeandreh/iam-snitch/internal/domain"
+import (
+	"github.com/jeandreh/iam-snitch/internal/domain/model"
+	"github.com/jeandreh/iam-snitch/internal/domain/ports"
+)
 
 type AccessControlService struct {
-	provider domain.IAMProviderIface
-	cache    domain.CacheIface
+	provider ports.IAMProviderIface
+	cache    ports.CacheIface
 }
 
-func NewAccessControlService(provider domain.IAMProviderIface, cache domain.CacheIface) *AccessControlService {
+func NewAccessControlService(provider ports.IAMProviderIface, cache ports.CacheIface) *AccessControlService {
 	return &AccessControlService{
 		provider: provider,
 		cache:    cache,
@@ -22,9 +25,10 @@ func (a *AccessControlService) RefreshACL() error {
 	return a.cache.SaveACL(acl)
 }
 
-func (a *AccessControlService) WhoCan(action domain.Action, resource domain.Resource) ([]domain.AccessControlRule, error) {
-	return a.cache.Find(&domain.Filter{
-		Actions:   []domain.Action{action},
-		Resources: []domain.Resource{resource},
+func (a *AccessControlService) WhoCan(actions []string, resources []model.Resource, exact bool) ([]model.AccessControlRule, error) {
+	return a.cache.Find(&model.Filter{
+		Actions:    actions,
+		Resources:  resources,
+		ExactMatch: exact,
 	})
 }

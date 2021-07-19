@@ -2,14 +2,15 @@ package aws
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"net/url"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/iam/types"
-	"github.com/jeandreh/iam-snitch/internal/domain"
+	"github.com/jeandreh/iam-snitch/internal/domain/model"
+	"github.com/jeandreh/iam-snitch/internal/domain/ports"
 )
 
 type IAMProvider struct {
@@ -17,7 +18,7 @@ type IAMProvider struct {
 	cli IAMClientIface
 }
 
-var _ domain.IAMProviderIface = (*IAMProvider)(nil)
+var _ ports.IAMProviderIface = (*IAMProvider)(nil)
 
 func NewIAMProvider(cfg *aws.Config) (as *IAMProvider, err error) {
 	ctx := context.TODO()
@@ -38,13 +39,13 @@ func NewIAMProvider(cfg *aws.Config) (as *IAMProvider, err error) {
 	return as, err
 }
 
-func (a *IAMProvider) FetchACL() ([]domain.AccessControlRule, error) {
+func (a *IAMProvider) FetchACL() ([]model.AccessControlRule, error) {
 	roles, err := a.fetchRoles()
 	if err != nil {
 		return nil, err
 	}
 
-	var acl []domain.AccessControlRule
+	var acl []model.AccessControlRule
 	for _, role := range roles {
 		principals, err := a.getPrincipals(&role)
 		if err != nil {
@@ -58,7 +59,7 @@ func (a *IAMProvider) FetchACL() ([]domain.AccessControlRule, error) {
 
 		newRules := NewACLBuilder(role, principals, policies).Build()
 
-		log.Printf("%v rules found for role %v", len(newRules), *role.RoleName)
+		fmt.Printf("%v rules found for role %v\n", len(newRules), *role.RoleName)
 
 		acl = append(acl, newRules...)
 	}

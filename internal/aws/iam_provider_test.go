@@ -8,7 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/iam/types"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/golang/mock/gomock"
-	"github.com/jeandreh/iam-snitch/internal/domain"
+	"github.com/jeandreh/iam-snitch/internal/domain/model"
 	"github.com/jeandreh/iam-snitch/internal/mocks"
 	"github.com/stretchr/testify/require"
 )
@@ -23,7 +23,7 @@ func TestFetchACL(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    []domain.AccessControlRule
+		want    []model.AccessControlRule
 		wantErr error
 	}{
 		{
@@ -80,26 +80,24 @@ func TestFetchACL(t *testing.T) {
 					},
 				},
 			},
-			[]domain.AccessControlRule{
+			[]model.AccessControlRule{
 				{
-					Principal: domain.Principal{ID: "Service[s3.amazonaws.com]"},
-					Resource:  domain.Resource{ID: "someresource"},
-					Permissions: []domain.Permission{
-						{
-							Action: domain.Action{ID: "someaction"},
-							GrantChain: []domain.GrantIface{
-								domain.RoleGrant{
-									Grant: domain.Grant{
-										Type: "Role",
-										ID:   "arn:role",
-									},
-								},
-								domain.PolicyGrant{
-									Grant: domain.Grant{
-										Type: "Policy",
-										ID:   "arn:policy",
-									},
-								},
+					Principal: model.Principal{ID: "Service[s3.amazonaws.com]"},
+					Resource:  model.Resource{ID: "someresource"},
+					Permission: model.Permission{
+						ID: "someaction",
+					},
+					GrantChain: []model.GrantIface{
+						model.RoleGrant{
+							Grant: model.Grant{
+								Type: "Role",
+								ID:   "arn:role",
+							},
+						},
+						model.PolicyGrant{
+							Grant: model.Grant{
+								Type: "Policy",
+								ID:   "arn:policy",
 							},
 						},
 					},

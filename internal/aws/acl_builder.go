@@ -2,14 +2,14 @@ package aws
 
 import (
 	"github.com/aws/aws-sdk-go-v2/service/iam/types"
-	"github.com/jeandreh/iam-snitch/internal/domain"
+	"github.com/jeandreh/iam-snitch/internal/domain/model"
 )
 
 type ACLBuilder struct {
 	role       types.Role
 	principals []Principal
 	policies   []IdentityPolicy
-	acl        []domain.AccessControlRule
+	acl        []model.AccessControlRule
 }
 
 func NewACLBuilder(role types.Role, principals []Principal, policies []IdentityPolicy) *ACLBuilder {
@@ -17,38 +17,44 @@ func NewACLBuilder(role types.Role, principals []Principal, policies []IdentityP
 		role,
 		principals,
 		policies,
-		make([]domain.AccessControlRule, 0, 100),
+		make([]model.AccessControlRule, 0, 100),
 	}
 }
 
-func (b *ACLBuilder) Build() []domain.AccessControlRule {
+func (b *ACLBuilder) Build() []model.AccessControlRule {
 	for _, po := range b.policies {
 		for _, pr := range b.principals {
-			b.processStatements(&po, &pr)
+			b.processStatements(&pr, &po)
 		}
 	}
 	return b.acl
 }
 
-func (b *ACLBuilder) processStatements(po *IdentityPolicy, pr *Principal) {
+func (b *ACLBuilder) processStatements(pr *Principal, po *IdentityPolicy) {
 	for _, s := range po.Statements {
-		for _, r := range s.Resources {
-			rule := domain.AccessControlRule{
-				Principal:   domain.Principal{ID: pr.String()},
-				Permissions: make([]domain.Permission, 0, 10),
-				Resource:    domain.Resource{ID: r},
-			}
-			for _, a := range s.Actions {
-				perm := domain.Permission{
-					Action: domain.Action{ID: a},
-					GrantChain: []domain.GrantIface{
-						domain.NewRoleGrant(*b.role.Arn),
-						domain.NewPolicyGrant(po.ARN),
-					},
-				}
-				rule.Permissions = append(rule.Permissions, perm)
-			}
-			b.acl = append(b.acl, rule)
+		b.processStatement(pr, po, &s)
+	}
+}
+
+func (b *ACLBuilder) processStatement(pr *Principal, po *IdentityPolicy, s *Statement) {
+	for _, r := range s.Resources {
+		b.processRules(pr, po, r, s.Actions)
+	}
+}
+
+func (b *ACLBuilder) processRules(pr *Principal, po *IdentityPolicy, r string, al []string) {
+	for _, a := range al {
+		rule := model.AccessControlRule{
+			Principal: model.Principal{ID: pr.String()},
+			Permission: model.Permission{
+				ID: a,
+			},
+			Resource: model.Resource{ID: r},
+			GrantChain: []model.GrantIface{
+				model.NewRoleGrant(*b.role.Arn),
+				model.NewPolicyGrant(po.ARN),
+			},
 		}
+		b.acl = append(b.acl, rule)
 	}
 }

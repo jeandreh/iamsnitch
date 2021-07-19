@@ -20,7 +20,7 @@ func init() {
 }
 
 func runRefreshCmd(cmd *cobra.Command, args []string) error {
-	cache, err := cache.NewCache()
+	cache, err := cache.New()
 	if err != nil {
 		return err
 	}

@@ -2,12 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/jeandreh/iam-snitch/iamsnitch"
 	"github.com/jeandreh/iam-snitch/internal/aws"
 	"github.com/jeandreh/iam-snitch/internal/cache"
-	"github.com/jeandreh/iam-snitch/internal/domain"
+	"github.com/jeandreh/iam-snitch/internal/domain/model"
 	"github.com/spf13/cobra"
 )
 
@@ -21,21 +20,23 @@ Usage example:
 	iamsnitch whocan -a "s3:PutObject" -r "*"`,
 		RunE: runWhoCan,
 	}
-	action   string
-	resource string
+	actions   []string
+	resources []string
+	exact     bool
 )
 
 func init() {
-	whoCanCmd.Flags().StringVarP(&action, "action", "a", "", "action of interest")
-	whoCanCmd.Flags().StringVarP(&resource, "resource", "r", "", "resource of interest")
-	whoCanCmd.MarkFlagRequired("action")
-	whoCanCmd.MarkFlagRequired("resource")
+	whoCanCmd.Flags().BoolVarP(&exact, "exact", "e", false, "whether to use an exact match or interpret * as wildcard")
+	whoCanCmd.Flags().StringSliceVarP(&actions, "actions", "a", []string{}, "actions of interest")
+	whoCanCmd.Flags().StringSliceVarP(&resources, "resources", "r", []string{}, "resource of interest")
+	whoCanCmd.MarkFlagRequired("actions")
+	whoCanCmd.MarkFlagRequired("resources")
 
 	rootCmd.AddCommand(whoCanCmd)
 }
 
 func runWhoCan(cmd *cobra.Command, args []string) error {
-	cache, err := cache.NewCache()
+	cache, err := cache.New()
 	if err != nil {
 		return err
 	}
@@ -49,36 +50,32 @@ func runWhoCan(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	a := domain.Action{ID: action}
-	r := domain.Resource{ID: resource}
-	acl, err := accessService.WhoCan(a, r)
+
+	var res []model.Resource
+	for _, v := range resources {
+		res = append(res, model.Resource{ID: v})
+	}
+
+	acl, err := accessService.WhoCan(actions, res, exact)
 	if err != nil {
 		return err
 	}
-	printOutput(a, acl)
+	printOutput(acl)
 	return nil
 }
 
-func printOutput(action domain.Action, acl []domain.AccessControlRule) {
+func printOutput(acl []model.AccessControlRule) {
 	for _, r := range acl {
-		log.Println(r.Principal.ID)
-		p := getPermission(action, r.Permissions)
-		log.Println("via: ")
-		tabs := "  "
-		for _, g := range p.GrantChain {
-			log.Printf("%v|-> %v", tabs, g.String())
-			tabs += "  "
+		fmt.Printf("principal: %s\n", r.Principal.ID)
+		fmt.Printf("permission: %s\n", r.Permission.ID)
+		fmt.Printf("resource: %s\n", r.Resource.ID)
+		fmt.Println("via: ")
+
+		tabs := " "
+		for _, g := range r.GrantChain {
+			fmt.Printf("%v|-> %v\n", tabs, g.String())
+			tabs += " "
 		}
 		fmt.Println("")
 	}
-}
-
-// TODO: this shouldn't be necessary
-func getPermission(action domain.Action, perms []domain.Permission) *domain.Permission {
-	for _, p := range perms {
-		if action == p.Action {
-			return &p
-		}
-	}
-	return nil
 }
