@@ -81,7 +81,7 @@ func TestRefreshACL(t *testing.T) {
 func TestWhoCan(t *testing.T) {
 	type args struct {
 		actions   []string
-		resources []model.Resource
+		resources []string
 		exact     bool
 	}
 	tests := []struct {
@@ -94,7 +94,7 @@ func TestWhoCan(t *testing.T) {
 			"globbed search",
 			args{
 				actions:   []string{"someaction"},
-				resources: []model.Resource{{ID: "resource"}},
+				resources: []string{"resource"},
 				exact:     false,
 			},
 			[]model.AccessControlRule{
@@ -108,7 +108,7 @@ func TestWhoCan(t *testing.T) {
 			"exact search",
 			args{
 				actions:   []string{"someaction"},
-				resources: []model.Resource{{ID: "resource"}},
+				resources: []string{"resource"},
 				exact:     true,
 			},
 			[]model.AccessControlRule{
@@ -122,7 +122,7 @@ func TestWhoCan(t *testing.T) {
 			"find error",
 			args{
 				actions:   []string{"someaction"},
-				resources: []model.Resource{{ID: "resource"}},
+				resources: []string{"resource"},
 				exact:     false,
 			},
 			nil,

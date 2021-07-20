@@ -66,7 +66,7 @@ func (c *SQLiteCache) Find(filter *model.Filter) ([]model.AccessControlRule, err
 	tx := c.db.
 		Preload("GrantChain").
 		Where(
-			buildWhereExpr("resource", filter.ResourcesAsString(), filter.ExactMatch),
+			buildWhereExpr("resource", filter.Resources, filter.ExactMatch),
 			buildWhereExpr("permission", filter.Actions, filter.ExactMatch),
 		).
 		Find(&filteredRules)

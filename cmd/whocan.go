@@ -16,8 +16,13 @@ var (
 		Short: "find out who can do what",
 		Long: `Analyses your users, roles and policies to determine which of them attend to your search criteria:
 Usage example:  
-	# find out which principals can put objects on all the S3 buckets in your account
-	iamsnitch whocan -a "s3:PutObject" -r "*"`,
+	# find out which principals can perform any of the Put operation on any of 
+	# the S3 buckets in your account (returns PutObject, PutObjectACL, etc.)
+	iamsnitch whocan -p "s3:Put*" -r "*"
+
+	# find out which principals are allowed to perform "s3:*" on every S3 bucket
+	# (ignores wildcard *, returning only entries containing "s3:*" and "*")
+	iamsnitch whocan -e -p "s3:*" "*"`,
 		RunE: runWhoCan,
 	}
 	actions   []string
@@ -51,12 +56,7 @@ func runWhoCan(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	var res []model.Resource
-	for _, v := range resources {
-		res = append(res, model.Resource{ID: v})
-	}
-
-	acl, err := accessService.WhoCan(actions, res, exact)
+	acl, err := accessService.WhoCan(actions, resources, exact)
 	if err != nil {
 		return err
 	}
