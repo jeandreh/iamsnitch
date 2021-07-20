@@ -25,10 +25,10 @@ func (a *AccessControlService) RefreshACL() error {
 	return a.cache.SaveACL(acl)
 }
 
-func (a *AccessControlService) WhoCan(actions []string, resources []string, exact bool) ([]model.AccessControlRule, error) {
+func (a *AccessControlService) WhoCan(permissions []string, resources []string, exact bool) ([]model.AccessControlRule, error) {
 	return a.cache.Find(&model.Filter{
-		Actions:    actions,
-		Resources:  resources,
-		ExactMatch: exact,
+		Permissions: permissions,
+		Resources:   resources,
+		ExactMatch:  exact,
 	})
 }

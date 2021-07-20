@@ -25,16 +25,16 @@ Usage example:
 	iamsnitch whocan -e -p "s3:*" "*"`,
 		RunE: runWhoCan,
 	}
-	actions   []string
-	resources []string
-	exact     bool
+	permissions []string
+	resources   []string
+	exact       bool
 )
 
 func init() {
 	whoCanCmd.Flags().BoolVarP(&exact, "exact", "e", false, "whether to use an exact match or interpret * as wildcard")
-	whoCanCmd.Flags().StringSliceVarP(&actions, "actions", "a", []string{}, "actions of interest")
+	whoCanCmd.Flags().StringSliceVarP(&permissions, "permissions", "p", []string{}, "actions of interest")
 	whoCanCmd.Flags().StringSliceVarP(&resources, "resources", "r", []string{}, "resource of interest")
-	whoCanCmd.MarkFlagRequired("actions")
+	whoCanCmd.MarkFlagRequired("permissions")
 	whoCanCmd.MarkFlagRequired("resources")
 
 	rootCmd.AddCommand(whoCanCmd)
@@ -56,7 +56,7 @@ func runWhoCan(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	acl, err := accessService.WhoCan(actions, resources, exact)
+	acl, err := accessService.WhoCan(permissions, resources, exact)
 	if err != nil {
 		return err
 	}

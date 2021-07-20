@@ -52,7 +52,7 @@ func TestSQLiteCacheSaveACL(t *testing.T) {
 			require.Equal(t, cache.SaveACL(tt.args.rules), tt.wantErr)
 
 			savedRules, err := cache.Find(&model.Filter{
-				Actions:    []string{"*"},
+				Permissions:    []string{"*"},
 				Resources:  []string{"*"},
 				ExactMatch: false,
 			})
@@ -82,7 +82,7 @@ func TestSQLiteCacheFind(t *testing.T) {
 					newRule("ec2:CreateInstance", "arn:aws:ec2:*:*:instance/someinstanceid"),
 				},
 				model.Filter{
-					Actions:    []string{"ec2:CreateInstance"},
+					Permissions:    []string{"ec2:CreateInstance"},
 					Resources:  []string{"arn:aws:ec2:*:*:instance/someinstanceid"},
 					ExactMatch: true,
 				},
@@ -100,7 +100,7 @@ func TestSQLiteCacheFind(t *testing.T) {
 					newRule("ec2:CreateInstance", "arn:aws:ec2:*:*:instance/someinstanceid"),
 				},
 				model.Filter{
-					Actions:    []string{"*"},
+					Permissions:    []string{"*"},
 					Resources:  []string{"*"},
 					ExactMatch: true,
 				},
@@ -118,7 +118,7 @@ func TestSQLiteCacheFind(t *testing.T) {
 					newRule("ec2:CreateInstance", "arn:aws:ec2:*:*:instance/someinstanceid"),
 				},
 				model.Filter{
-					Actions:    []string{"*"},
+					Permissions:    []string{"*"},
 					Resources:  []string{"*"},
 					ExactMatch: false,
 				},
@@ -137,7 +137,7 @@ func TestSQLiteCacheFind(t *testing.T) {
 					newRule("ec2:CreateInstance", "arn:aws:ec2:*:*:instance/someinstanceid"),
 				},
 				model.Filter{
-					Actions:    []string{"ec2:Create*"},
+					Permissions:    []string{"ec2:Create*"},
 					Resources:  []string{"*"},
 					ExactMatch: false,
 				},
@@ -155,7 +155,7 @@ func TestSQLiteCacheFind(t *testing.T) {
 					newRule("ec2:CreateInstance", "arn:aws:ec2:*:*:instance/someinstanceid"),
 				},
 				model.Filter{
-					Actions:    []string{"ec2:Create*"},
+					Permissions:    []string{"ec2:Create*"},
 					Resources:  []string{"*"},
 					ExactMatch: true,
 				},

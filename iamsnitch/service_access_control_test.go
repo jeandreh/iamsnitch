@@ -150,7 +150,7 @@ func TestWhoCan(t *testing.T) {
 			cacheMock.
 				EXPECT().
 				Find(gomock.Eq(&model.Filter{
-					Actions:    tt.args.actions,
+					Permissions:    tt.args.actions,
 					Resources:  tt.args.resources,
 					ExactMatch: tt.args.exact,
 				})).
