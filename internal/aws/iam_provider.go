@@ -39,22 +39,22 @@ func NewIAMProvider(cfg *aws.Config) (as *IAMProvider, err error) {
 	return as, err
 }
 
-func (a *IAMProvider) FetchACL() ([]model.AccessControlRule, error) {
-	roles, err := a.fetchRoles()
+func (a *IAMProvider) FetchACL(page ports.PageIface) ([]model.AccessControlRule, ports.PageIface, error) {
+	roles, nextPage, err := a.fetchRoles(page)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var acl []model.AccessControlRule
 	for _, role := range roles {
 		principals, err := a.getPrincipals(&role)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		policies, err := a.fetchAttachedPolicies(&role)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		newRules := NewACLBuilder(role, principals, policies).Build()
@@ -63,16 +63,25 @@ func (a *IAMProvider) FetchACL() ([]model.AccessControlRule, error) {
 
 		acl = append(acl, newRules...)
 	}
-	return acl, nil
+
+	return acl, nextPage, nil
 }
 
-func (a *IAMProvider) fetchRoles() ([]types.Role, error) {
-	output, err := a.cli.ListRoles(a.ctx, &iam.ListRolesInput{})
-	if err != nil {
-		return nil, err
+func (a *IAMProvider) fetchRoles(pageToken ports.PageIface) ([]types.Role, ports.PageIface, error) {
+	lri := iam.ListRolesInput{
+		MaxItems: aws.Int32(1000),
 	}
 
-	return output.Roles, nil
+	if pageToken != nil {
+		lri.Marker = pageToken.Next()
+	}
+
+	output, err := a.cli.ListRoles(a.ctx, &lri)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return output.Roles, NewPageToken(output.Marker), nil
 }
 
 func (a *IAMProvider) getPrincipals(role *types.Role) ([]Principal, error) {

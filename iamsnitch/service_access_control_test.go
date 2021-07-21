@@ -54,10 +54,12 @@ func TestRefreshACL(t *testing.T) {
 				cache:    cacheMock,
 			}
 
+			pageMock := mocks.NewPageMock(ctrl)
+
 			iamMock.
 				EXPECT().
-				FetchACL().
-				Return(tt.want, tt.wantErrFetch).
+				FetchACL(nil).
+				Return(tt.want, pageMock, tt.wantErrFetch).
 				Times(1)
 
 			if tt.wantErrFetch == nil {
@@ -66,10 +68,23 @@ func TestRefreshACL(t *testing.T) {
 					SaveACL(gomock.Eq(tt.want)).
 					Return(tt.wantErrSave).
 					Times(1)
+
+				if tt.wantErrSave == nil {
+					pageMock.
+						EXPECT().
+						HasNext().
+						Return(false).
+						Times(1)
+				}
+
 			} else {
 				cacheMock.
 					EXPECT().
 					SaveACL(gomock.Any()).
+					Times(0)
+				pageMock.
+					EXPECT().
+					HasNext().
 					Times(0)
 			}
 
@@ -144,15 +159,15 @@ func TestWhoCan(t *testing.T) {
 
 			iamMock.
 				EXPECT().
-				FetchACL().
+				FetchACL(nil).
 				Times(0)
 
 			cacheMock.
 				EXPECT().
 				Find(gomock.Eq(&model.Filter{
-					Permissions:    tt.args.actions,
-					Resources:  tt.args.resources,
-					ExactMatch: tt.args.exact,
+					Permissions: tt.args.actions,
+					Resources:   tt.args.resources,
+					ExactMatch:  tt.args.exact,
 				})).
 				Return(tt.want, tt.wantErr).
 				Times(1)

@@ -105,6 +105,86 @@ func TestFetchACL(t *testing.T) {
 			},
 			nil,
 		},
+		{
+			"pagination",
+			args{
+				listRolesOutput: &iam.ListRolesOutput{
+					Roles: []types.Role{
+						{
+							RoleId:   aws.String("roleid"),
+							Arn:      aws.String("arn:role"),
+							RoleName: aws.String("rolename"),
+							AssumeRolePolicyDocument: aws.String(`{
+								"Version": "2012-10-17",
+								"Statement": [
+									{
+										"Effect": "Allow",
+										"Principal": {
+											"Service": "s3.amazonaws.com"
+										},
+										"Action": "sts:AssumeRole"
+									}
+								]
+							}`),
+						},
+					},
+					Marker: aws.String("nextPage"),
+				},
+				rolePoliciesOutput: &iam.ListAttachedRolePoliciesOutput{
+					AttachedPolicies: []types.AttachedPolicy{
+						{
+							PolicyArn:  aws.String("arn:policy"),
+							PolicyName: aws.String("policyname"),
+						},
+					},
+				},
+				getPolicyOutput: &iam.GetPolicyOutput{
+					Policy: &types.Policy{
+						Arn:              aws.String("arn:policy"),
+						PolicyName:       aws.String("policy"),
+						DefaultVersionId: aws.String("version"),
+					},
+				},
+				getPolicyVersionOutput: &iam.GetPolicyVersionOutput{
+					PolicyVersion: &types.PolicyVersion{
+						Document: aws.String(`{
+							"Version": "2012-10-17",
+							"Statement": [
+								{
+									"Effect": "Allow",
+									"Action": "someaction",
+									"Resource": "someresource"
+								}
+							]
+						}`),
+					},
+				},
+			},
+			[]model.AccessControlRule{
+				{
+					Principal: model.Principal{ID: "Service[s3.amazonaws.com]"},
+					Resource:  model.Resource{ID: "someresource"},
+					Permission: model.Permission{
+						ID: "someaction",
+					},
+					GrantChain: []model.GrantIface{
+						model.RoleGrant{
+							Grant: model.Grant{
+								Type: "Role",
+								ID:   "arn:role",
+							},
+						},
+						model.PolicyGrant{
+							Grant: model.Grant{
+								Type: "Policy",
+								ID:   "arn:policy",
+							},
+						},
+					},
+				},
+			},
+			nil,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -121,7 +201,7 @@ func TestFetchACL(t *testing.T) {
 
 			iamMock.
 				EXPECT().
-				ListRoles(gomock.Eq(ctx), gomock.Eq(&iam.ListRolesInput{})).
+				ListRoles(gomock.Eq(ctx), gomock.Eq(&iam.ListRolesInput{MaxItems: aws.Int32(1000)})).
 				Return(tt.args.listRolesOutput, nil).
 				Times(1)
 
@@ -159,9 +239,10 @@ func TestFetchACL(t *testing.T) {
 				Return(tt.args.getPolicyVersionOutput, nil).
 				Times(1)
 
-			acl, err := a.FetchACL()
+			acl, nextPage, err := a.FetchACL(nil)
 
 			require.Equal(t, tt.wantErr, err)
+			require.Equal(t, tt.args.listRolesOutput.Marker, nextPage.Next())
 			require.Equal(t, tt.want, acl)
 		})
 	}

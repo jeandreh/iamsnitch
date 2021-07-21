@@ -17,12 +17,22 @@ func NewAccessControlService(provider ports.IAMProviderIface, cache ports.CacheI
 	}
 }
 
-func (a *AccessControlService) RefreshACL() error {
-	acl, err := a.provider.FetchACL()
-	if err != nil {
-		return err
+func (a *AccessControlService) RefreshACL() (err error) {
+	var nextPage ports.PageIface
+	var rules []model.AccessControlRule
+
+	for ok := true; ok; ok = nextPage.HasNext() {
+		rules, nextPage, err = a.provider.FetchACL(nextPage)
+		if err != nil {
+			return err
+		}
+
+		if err = a.cache.SaveACL(rules); err != nil {
+			return err
+		}
 	}
-	return a.cache.SaveACL(acl)
+
+	return nil
 }
 
 func (a *AccessControlService) WhoCan(permissions []string, resources []string, exact bool) ([]model.AccessControlRule, error) {
