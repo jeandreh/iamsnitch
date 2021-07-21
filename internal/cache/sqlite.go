@@ -5,6 +5,7 @@ import (
 
 	"github.com/jeandreh/iam-snitch/internal/domain/model"
 	"github.com/jeandreh/iam-snitch/internal/domain/ports"
+	"github.com/sirupsen/logrus"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -35,12 +36,15 @@ func new(connStr string, config *gorm.Config) (*SQLiteCache, error) {
 }
 
 func (c *SQLiteCache) SaveACL(rules []model.AccessControlRule) error {
-	fmt.Printf("%v rules saved to cache\n", len(rules))
 	for _, dr := range rules {
 		var lr AccessControlRule
 
 		result := c.db.Find(&lr, "rule_id = ?", dr.ID())
 		if result.Error != nil {
+			logrus.WithFields(logrus.Fields{
+				"rule":  dr,
+				"error": result.Error,
+			}).Error("failed to load rule from cache")
 			return result.Error
 		}
 
@@ -53,10 +57,15 @@ func (c *SQLiteCache) SaveACL(rules []model.AccessControlRule) error {
 			nr := NewAccessControlRule(&dr)
 			result = c.db.Save(nr)
 			if result.Error != nil {
+				logrus.WithFields(logrus.Fields{
+					"rule":  lr,
+					"error": result.Error,
+				}).Error("failed to save rule to cache")
 				return result.Error
 			}
 		}
 	}
+	fmt.Printf("%v rules saved to cache\n", len(rules))
 	return nil
 }
 

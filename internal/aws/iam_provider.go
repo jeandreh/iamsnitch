@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/iam/types"
 	"github.com/jeandreh/iam-snitch/internal/domain/model"
 	"github.com/jeandreh/iam-snitch/internal/domain/ports"
+	"github.com/sirupsen/logrus"
 )
 
 type IAMProvider struct {
@@ -42,6 +43,10 @@ func NewIAMProvider(cfg *aws.Config) (as *IAMProvider, err error) {
 func (a *IAMProvider) FetchACL(page ports.PageIface) ([]model.AccessControlRule, ports.PageIface, error) {
 	roles, nextPage, err := a.fetchRoles(page)
 	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"page":  page,
+			"error": err,
+		}).Error("failed to fetch roles from aws")
 		return nil, nil, err
 	}
 
@@ -49,12 +54,21 @@ func (a *IAMProvider) FetchACL(page ports.PageIface) ([]model.AccessControlRule,
 	for _, role := range roles {
 		principals, err := a.getPrincipals(&role)
 		if err != nil {
-			return nil, nil, err
+			logrus.WithFields(logrus.Fields{
+				"role":      *role.Arn,
+				"principal": *role.AssumeRolePolicyDocument,
+				"error":     err,
+			}).Error("failed to fetch principal from trust policy")
+			continue
 		}
 
 		policies, err := a.fetchAttachedPolicies(&role)
 		if err != nil {
-			return nil, nil, err
+			logrus.WithFields(logrus.Fields{
+				"role":  *role.Arn,
+				"error": err,
+			}).Error("failed to fetch policies attached to role")
+			continue
 		}
 
 		newRules := NewACLBuilder(role, principals, policies).Build()
@@ -68,9 +82,7 @@ func (a *IAMProvider) FetchACL(page ports.PageIface) ([]model.AccessControlRule,
 }
 
 func (a *IAMProvider) fetchRoles(pageToken ports.PageIface) ([]types.Role, ports.PageIface, error) {
-	lri := iam.ListRolesInput{
-		MaxItems: aws.Int32(1000),
-	}
+	lri := iam.ListRolesInput{}
 
 	if pageToken != nil {
 		lri.Marker = pageToken.Next()

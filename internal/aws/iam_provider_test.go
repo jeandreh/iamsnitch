@@ -201,7 +201,7 @@ func TestFetchACL(t *testing.T) {
 
 			iamMock.
 				EXPECT().
-				ListRoles(gomock.Eq(ctx), gomock.Eq(&iam.ListRolesInput{MaxItems: aws.Int32(1000)})).
+				ListRoles(gomock.Eq(ctx), gomock.Eq(&iam.ListRolesInput{})).
 				Return(tt.args.listRolesOutput, nil).
 				Times(1)
 
