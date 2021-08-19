@@ -73,7 +73,7 @@ func printOutput(acl []model.AccessControlRule) {
 
 		tabs := " "
 		for _, g := range r.GrantChain {
-			fmt.Printf("%v|-> %v\n", tabs, g.String())
+			fmt.Printf("%v|-> %v\n", tabs, g)
 			tabs += " "
 		}
 		fmt.Println("")

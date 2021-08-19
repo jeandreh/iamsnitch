@@ -19,8 +19,6 @@ type IAMProvider struct {
 	cli IAMClientIface
 }
 
-var _ ports.IAMProviderIface = (*IAMProvider)(nil)
-
 func NewIAMProvider(cfg *aws.Config) (as *IAMProvider, err error) {
 	ctx := context.TODO()
 
@@ -55,7 +53,7 @@ func (a *IAMProvider) FetchACL(page ports.PageIface) ([]model.AccessControlRule,
 		principals, err := a.getPrincipals(&role)
 		if err != nil {
 			logrus.WithFields(logrus.Fields{
-				"role":      *role.Arn,
+				"role":      *(role.Arn),
 				"principal": *role.AssumeRolePolicyDocument,
 				"error":     err,
 			}).Error("failed to fetch principal from trust policy")
@@ -65,11 +63,11 @@ func (a *IAMProvider) FetchACL(page ports.PageIface) ([]model.AccessControlRule,
 		policies, err := a.fetchAttachedPolicies(&role)
 		if err != nil {
 			logrus.WithFields(logrus.Fields{
-				"role":  *role.Arn,
+				"role":  *(role.Arn),
 				"error": err,
 			}).Error("failed to fetch policies attached to role")
 			continue
-		}
+	}
 
 		newRules := NewACLBuilder(role, principals, policies).Build()
 
@@ -118,7 +116,7 @@ func (a *IAMProvider) fetchAttachedPolicies(role *types.Role) ([]IdentityPolicy,
 		return nil, err
 	}
 
-	var policies []IdentityPolicy
+	policies := make([]IdentityPolicy, 0, len(lp.AttachedPolicies))
 	for _, attachedRolePolicy := range lp.AttachedPolicies {
 		np, err := a.fetchIdentityPolicy(&attachedRolePolicy)
 		if err != nil {

@@ -73,6 +73,6 @@ func (pl *PrincipalList) add(key Type, values ...interface{}) error {
 	return nil
 }
 
-func (p *Principal) String() string {
+func (p Principal) String() string {
 	return fmt.Sprintf("%v[%v]", p.Type, p.ID)
 }

@@ -14,7 +14,7 @@ type Grant struct {
 }
 
 func NewGrantChain(dg []model.GrantIface) []Grant {
-	var gc []Grant
+	gc := make([]Grant, 0, len(dg))
 	for _, g := range dg {
 		gc = append(gc, Grant{Value: g.String()})
 	}

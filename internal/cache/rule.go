@@ -14,7 +14,7 @@ type AccessControlRule struct {
 	GrantChain []Grant
 }
 
-func NewAccessControlRule(da *model.AccessControlRule) *AccessControlRule {
+func NewRule(da *model.AccessControlRule) *AccessControlRule {
 	return &AccessControlRule{
 		RuleID:     da.ID(),
 		Principal:  da.Principal.ID,
@@ -36,7 +36,7 @@ func (a *AccessControlRule) Map() model.AccessControlRule {
 }
 
 func (a *AccessControlRule) mapGrantChain() []model.GrantIface {
-	var mg []model.GrantIface
+	mg := make([]model.GrantIface, 0, len(a.GrantChain))
 	for _, g := range a.GrantChain {
 		mg = append(mg, g.Map())
 	}
