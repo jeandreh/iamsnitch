@@ -12,6 +12,16 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+func init() {
+	sql.Register("sqlite3_extended",
+		&sqlite3.SQLiteDriver{
+			ConnectHook: func(conn *sqlite3.SQLiteConn) error {
+				return conn.RegisterFunc("match", match, true)
+			},
+		},
+	)
+}
+
 type SQLiteCache struct {
 	db *gorm.DB
 }
@@ -103,14 +113,6 @@ func buildWhereExpr(column string, filters []string, exact bool) clause.Where {
 }
 
 func new(connStr string, config *gorm.Config) (*SQLiteCache, error) {
-	sql.Register("sqlite3_extended",
-		&sqlite3.SQLiteDriver{
-			ConnectHook: func(conn *sqlite3.SQLiteConn) error {
-				return conn.RegisterFunc("match", match, true)
-			},
-		},
-	)
-
 	db, err := gorm.Open(
 		sqlite.Dialector{
 			DriverName: "sqlite3_extended",
@@ -131,76 +133,48 @@ func new(connStr string, config *gorm.Config) (*SQLiteCache, error) {
 	return &SQLiteCache{db: db}, nil
 }
 
-// aws:*:ap-*:2893483479:*:test/somedir/obj
-// aws:s3:*:2893483479:mybucket:*
-
 func match(s1, s2 string) bool {
-	i1, i2 := 0, 0
-	for i1 < len(s1) {
+	var i1, i2 int
+
+	for i1 < len(s1) && i2 < len(s2) {
 		if s1[i1] == '*' {
+			i1++
 			if s2[i2] == '*' {
-				i1++
 				i2++
 				continue
 			}
-			var delim byte
-			for j := i1 + 1; j < len(s1); j++ {
-				if s1[j] != '*' {
-					delim = s1[j]
-					i1 = j
-					break
-				}
-			}
+
+			adv, delim := findDelim(s1[i1:])
 			if delim == 0 {
 				return true
 			}
-			found := false
-			for j := i2; j < len(s2); j++ {
-				if s2[j] == delim {
-					i2 = j
-					found = true
-					break
-				}
-				if s2[j] == '*' {
-					i2 = j + 1
-					found = true
-					break
-				}
+			i1 += adv
+
+			adv = stripMatch(delim, s2[i2:])
+			if adv == 0 {
+				return false
 			}
-			if !found {
+			i2 += adv
+
+			if i1 >= len(s1) && i2 < len(s2) {
 				return false
 			}
 		} else if s2[i2] == '*' {
-			if s1[i1] == '*' {
-				i1++
-				i2++
-				continue
-			}
-			var delim byte
-			for j := i2 + 1; j < len(s2); j++ {
-				if s2[j] != '*' {
-					delim = s2[j]
-					i2 = j
-					break
-				}
-			}
+			i2++
+
+			adv, delim := findDelim(s2[i2:])
 			if delim == 0 {
 				return true
 			}
-			found := false
-			for j := i1 + 1; j < len(s1); j++ {
-				if s1[j] == delim {
-					i1 = j
-					found = true
-					break
-				}
-				if s1[j] == '*' {
-					i1 = j + 1
-					found = true
-					break
-				}
+			i2 += adv
+
+			adv = stripMatch(delim, s1[i1:])
+			if adv == 0 {
+				return false
 			}
-			if !found {
+			i1 += adv
+
+			if i2 >= len(s2) && i1 < len(s1) {
 				return false
 			}
 		} else {
@@ -214,49 +188,27 @@ func match(s1, s2 string) bool {
 	return true
 }
 
-// func match(re, s string) (bool, error) {
-// 	re = strings.Replace(re, "*", ".*", -1)
-// 	re = strings.Replace(re, "?", ".?", -1)
-// 	return regexp.MatchString(re, s)
-// }
-
-func findDelim(s string) (delim byte) {
-	for _, v := range s {
+func findDelim(s string) (adv int, delim byte) {
+	for i, v := range s {
 		if v != '*' {
 			delim = byte(v)
+			adv = i + 1
 			break
 		}
 	}
 	return
 }
 
-func matchingString(s string) (string, bool) {
-
-	var delim byte
-	for j := i1 + 1; j < len(s1); j++ {
-		if s1[j] != '*' {
-			delim = s1[j]
-			i1 = j
+func stripMatch(delim byte, s string) (adv int) {
+	for i, v := range s {
+		if v == rune(delim) {
+			adv = i + 1
+			break
+		}
+		if v == '*' {
+			adv = i + 2
 			break
 		}
 	}
-	if delim == 0 {
-		return true
-	}
-	found := false
-	for j := i2; j < len(s2); j++ {
-		if s2[j] == delim {
-			i2 = j
-			found = true
-			break
-		}
-		if s2[j] == '*' {
-			i2 = j + 1
-			found = true
-			break
-		}
-	}
-	if !found {
-		return false
-	}
+	return
 }

@@ -209,8 +209,8 @@ func newRule(permisison string, resource string) model.AccessControlRule {
 
 func TestMatch(t *testing.T) {
 	type args struct {
-		re string
-		s  string
+		s1 string
+		s2 string
 	}
 	tests := []struct {
 		name string
@@ -218,7 +218,23 @@ func TestMatch(t *testing.T) {
 		want bool
 	}{
 		{
-			"star1",
+			"wildcard in string 1 only",
+			args{
+				"aws:s3:ap-southeast-2:2893483479:mybucket:test/somedir/obj",
+				"aws:s3:*:2893483479:mybucket:*",
+			},
+			true,
+		},
+		{
+			"wildcard in string 2 only",
+			args{
+				"aws:s3:*:2893483479:mybucket:*",
+				"aws:s3:ap-southeast-2:2893483479:mybucket:test/somedir/obj",
+			},
+			true,
+		},
+		{
+			"wildcards in different components of both strings",
 			args{
 				"aws:*:ap-*:2893483479:*:test/somedir/obj",
 				"aws:s3:*:2893483479:mybucket:*",
@@ -226,7 +242,15 @@ func TestMatch(t *testing.T) {
 			true,
 		},
 		{
-			"star2",
+			"multiple wildcards in sequence shouldn't affect match",
+			args{
+				"aws:*:ap-*:2893483479:*******:test/*****/obj",
+				"aws:s3:*:2893483479:mybucket:*",
+			},
+			true,
+		},
+		{
+			"string 1 with less components than string 2",
 			args{
 				"aws:*:ap-*",
 				"aws:s3:*:2893483479:mybucket:*",
@@ -234,7 +258,15 @@ func TestMatch(t *testing.T) {
 			true,
 		},
 		{
-			"star3",
+			"string 2 with less components than string 1",
+			args{
+				"aws:s3:*:2893483479:mybucket:*",
+				"aws:*:ap-*",
+			},
+			true,
+		},
+		{
+			"strings don't match",
 			args{
 				"aws:*:ap-*:2893483479:test:*",
 				"aws:s3:*:2893483479:mybucket:*",
@@ -242,7 +274,7 @@ func TestMatch(t *testing.T) {
 			false,
 		},
 		{
-			"star4",
+			"string 1 can be anything",
 			args{
 				"*",
 				"arn:aws:logs:*:*:log-group:*",
@@ -250,53 +282,33 @@ func TestMatch(t *testing.T) {
 			true,
 		},
 		{
-			"star5",
+			"string 2 can be anything",
 			args{
-				"arn:*",
+				"arn:aws:logs:*:*:log-group:*",
+				"*",
+			},
+			true,
+		},
+		{
+			"string 1 ends in a letter present in the middle of string 2",
+			args{
+				"*s",
+				"arn:aws:logs:*:*:log-group:*",
+			},
+			false,
+		},
+		{
+			"string 1 has a letter in string 2 surrounded by *",
+			args{
+				"*s*",
 				"arn:aws:logs:*:*:log-group:*",
 			},
 			true,
 		},
-		// {
-		// 	"star",
-		// 	args{
-		// 		"*",
-		// 		"arn:aws:apigateway:test::/apis/test/deployments",
-		// 	},
-		// 	true,
-		// 	false,
-		// },
-		// {
-		// 	"star in the middle",
-		// 	args{
-		// 		"arn:aws:apigateway:*::/apis/*/deployments",
-		// 		"arn:aws:apigateway:test::/apis/test/deployments",
-		// 	},
-		// 	true,
-		// 	false,
-		// },
-		// {
-		// 	"question mark in the middle",
-		// 	args{
-		// 		"arn:aws:apigateway:t?st::/apis/?est/deployments",
-		// 		"arn:aws:apigateway:test::/apis/test/deployments",
-		// 	},
-		// 	true,
-		// 	false,
-		// },
-		// {
-		// 	"mismatch",
-		// 	args{
-		// 		"arn:aws:apigateway:t?t::/apis/?est/deployments",
-		// 		"arn:aws:apigateway:test::/apis/test/deployments",
-		// 	},
-		// 	false,
-		// 	false,
-		// },
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := match(tt.args.re, tt.args.s)
+			got := match(tt.args.s1, tt.args.s2)
 			if got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
