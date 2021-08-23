@@ -143,6 +143,7 @@ func TestSQLiteCacheFind(t *testing.T) {
 				},
 			},
 			[]model.AccessControlRule{
+				newRule("*", "*"),
 				newRule("ec2:CreateInstance", "arn:aws:ec2:*:*:instance/someinstanceid"),
 			},
 			nil,

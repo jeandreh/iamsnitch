@@ -66,13 +66,10 @@ func (c *SQLiteCache) SaveACL(rules []model.AccessControlRule) error {
 func (c *SQLiteCache) Find(filter *model.Filter) ([]model.AccessControlRule, error) {
 	var filteredRules []AccessControlRule
 
-	tx := c.db.
+	tx := c.db.Debug().
 		Preload("GrantChain").
 		Where(
-			clause.Expr{
-				SQL:  "match(resource, ?)",
-				Vars: []interface{}{filter.Resources[0]},
-			},
+			buildWhereExpr("resource", filter.Resources, filter.ExactMatch),
 			buildWhereExpr("permission", filter.Permissions, filter.ExactMatch),
 		).
 		Find(&filteredRules)
@@ -90,15 +87,15 @@ func (c *SQLiteCache) Find(filter *model.Filter) ([]model.AccessControlRule, err
 }
 
 func buildWhereExpr(column string, filters []string, exact bool) clause.Where {
-	operation := "GLOB"
+	operation := "match(%s, ?)"
 	if exact {
-		operation = "="
+		operation = "%s = ?"
 	}
 
 	exprs := make([]clause.Expression, 0, len(filters))
 	for _, v := range filters {
 		exprs = append(exprs, clause.Expr{
-			SQL:  fmt.Sprintf("%s %s ?", column, operation),
+			SQL:  fmt.Sprintf(operation, column),
 			Vars: []interface{}{v},
 		})
 	}
