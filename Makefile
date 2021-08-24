@@ -32,5 +32,6 @@ x-build:
 	@echo "Cross-compiling iamsnitch for platforms linux/amd64 and darwin/amd64"
 	@docker run --rm \
 		-v ${PWD}/bin:/build \
-		-e TARGETS="linux/amd64 darwin/amd64" \
+		-e OUT=iamsnitch-xgo \
+		-e TARGETS="linux/amd64 darwin-10.10/amd64" \
 		karalabe/xgo-latest:latest github.com/jeandreh/iamsnitch
