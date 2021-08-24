@@ -29,6 +29,8 @@ docker-%:
 
 x-build:
 	@mkdir -p bin
-	docker pull karalabe/xgo-latest
-	go get github.com/karalabe/xgo
-	xgo --targets=linux/amd64,darwin/amd64 --dest bin github.com/jeandreh/iamsnitch
+	@echo "Cross-compiling iamsnitch for platforms linux/amd64 and darwin/amd64"
+	@docker run --rm \
+		-v ${PWD}/bin:/build \
+		-e TARGETS="linux/amd64 darwin/amd64" \
+		karalabe/xgo-latest:latest github.com/jeandreh/iamsnitch
