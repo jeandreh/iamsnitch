@@ -1,4 +1,4 @@
-OS_LIST:=linux darwin
+GOOS := $(shell uname -s | tr "[A-Z]" "[a-z]")
 
 all: build test
 
@@ -16,11 +16,7 @@ coverage: test
 
 build: generate
 	@mkdir -p bin
-	$(foreach os, $(OS_LIST), \
-		$(shell GOARCH=amd64 GOOS=$(os) go build -o bin/iamsnitch-$(os)-amd64) \
-	)
-	@echo "artifacts written to ./bin"
-	@ls bin
+	CGO_ENABLED="1" GOARCH="amd64" go build -o "bin/iamsnitch-$(GOOS)-amd64"
 
 clean: 
 	rm -f .snitch.db
@@ -30,3 +26,9 @@ clean:
 
 docker-%:
 	docker-compose run $*
+
+x-build:
+	@mkdir -p bin
+	docker pull karalabe/xgo-latest
+	go get github.com/karalabe/xgo
+	xgo --targets=linux/amd64,darwin/amd64 --dest bin github.com/jeandreh/iamsnitch

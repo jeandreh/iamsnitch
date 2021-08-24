@@ -66,7 +66,7 @@ func (c *SQLiteCache) SaveACL(rules []model.AccessControlRule) error {
 func (c *SQLiteCache) Find(filter *model.Filter) ([]model.AccessControlRule, error) {
 	var filteredRules []AccessControlRule
 
-	tx := c.db.Debug().
+	tx := c.db.
 		Preload("GrantChain").
 		Where(
 			buildWhereExpr("resource", filter.Resources, filter.ExactMatch),
