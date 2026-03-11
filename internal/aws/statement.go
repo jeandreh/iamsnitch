@@ -6,10 +6,11 @@ import (
 )
 
 type Statement struct {
-	Effect     string        `json:"Effect"`
-	Principals PrincipalList `json:"Principal"`
-	Actions    []string      `json:"Action"`
-	Resources  []string      `json:"Resource"`
+	Effect     string                            `json:"Effect"`
+	Principals PrincipalList                     `json:"Principal"`
+	Actions    []string                          `json:"Action"`
+	Resources  []string                          `json:"Resource"`
+	Conditions map[string]map[string]interface{} `json:"Condition"`
 }
 
 func (s *Statement) UnmarshalJSON(data []byte) error {
@@ -46,8 +47,18 @@ func (s *Statement) UnmarshalJSON(data []byte) error {
 
 	resources, ok := mapStmt["Resource"]
 	if ok {
-		return s.unmarshalResources(resources)
+		if err := s.unmarshalResources(resources); err != nil {
+			return err
+		}
 	}
+
+	conditions, ok := mapStmt["Condition"]
+	if ok {
+		if err := s.unmarshalConditions(conditions); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -99,4 +110,24 @@ func (s *Statement) unmarshalResources(data interface{}) error {
 		return nil
 	}
 	return fmt.Errorf("unknown Resources format")
+}
+
+func (s *Statement) unmarshalConditions(data interface{}) error {
+	conditionsMap, ok := data.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("Condition field is not a map")
+	}
+
+	s.Conditions = make(map[string]map[string]interface{})
+
+	for operator, conditionKeysData := range conditionsMap {
+		conditionKeys, ok := conditionKeysData.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("Condition operator %s value is not a map", operator)
+		}
+
+		s.Conditions[operator] = conditionKeys
+	}
+
+	return nil
 }

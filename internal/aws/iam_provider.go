@@ -67,7 +67,7 @@ func (a *IAMProvider) FetchACL(page ports.PageIface) ([]model.AccessControlRule,
 				"error": err,
 			}).Error("failed to fetch policies attached to role")
 			continue
-	}
+		}
 
 		newRules := NewACLBuilder(role, principals, policies).Build()
 
@@ -153,4 +153,28 @@ func (a *IAMProvider) fetchIdentityPolicy(ap *types.AttachedPolicy) (*IdentityPo
 		return nil, err
 	}
 	return np, nil
+}
+
+// FetchPermissionBoundaries fetches permission boundary policies for given principals.
+// Phase 2 placeholder: Returns empty map until AWS API integration is implemented.
+func (a *IAMProvider) FetchPermissionBoundaries(principals []string) (map[string]*model.BoundaryPolicy, error) {
+	// TODO: Phase 2 - Implement AWS API calls to fetch permission boundaries
+	// using iam.GetUserPermissionsBoundary() and iam.GetRolePermissionsBoundary()
+	return make(map[string]*model.BoundaryPolicy), nil
+}
+
+// FetchSCPs fetches all Service Control Policies for the account.
+// Phase 2 placeholder: Returns empty slice until AWS API integration is implemented.
+func (a *IAMProvider) FetchSCPs() ([]model.SCPPolicy, error) {
+	// TODO: Phase 2 - Implement AWS API calls to fetch SCPs
+	// using organizations.ListPolicies() with PolicyType="SERVICE_CONTROL_POLICY"
+	return make([]model.SCPPolicy, 0), nil
+}
+
+// FetchResourcePolicies fetches resource-based policies for specified services.
+// Phase 2 placeholder: Returns empty map until AWS API integration is implemented.
+func (a *IAMProvider) FetchResourcePolicies(services []string) (map[string]model.ResourcePolicy, error) {
+	// TODO: Phase 2 - Implement AWS API calls to fetch resource policies
+	// by service type (S3, SQS, SNS, KMS, Secrets Manager, Lambda)
+	return make(map[string]model.ResourcePolicy), nil
 }
