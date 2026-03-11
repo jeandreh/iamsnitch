@@ -1,5 +1,12 @@
 package model
 
+// IdentityPolicy represents an identity-based policy attached to a principal.
+// This includes managed and inline policies for IAM users, roles, and groups.
+type IdentityPolicy struct {
+	Principal  string
+	Statements interface{} // []Statement from AWS, but we avoid importing aws here
+}
+
 // BoundaryPolicy represents a permission boundary attached to a principal.
 // A permission boundary defines the maximum permissions a principal can have
 // (acts as an intersection with identity policies).

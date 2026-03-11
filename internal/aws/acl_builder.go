@@ -41,23 +41,96 @@ func NewACLBuilder(role types.Role, principals []Principal, policies []IdentityP
 // NewACLBuilderWithPolicies creates an ACLBuilder with full AWS policy evaluation order support.
 // Use this for Phase 3+ implementations that need boundaries, SCPs, and resource policies.
 func NewACLBuilderWithPolicies(
-	role types.Role,
-	principals []Principal,
-	identityPolicies []IdentityPolicy,
-	boundaryStatements []Statement,
-	scpStatements []Statement,
-	resourceStatements []Statement,
+	identityPolicies []model.IdentityPolicy,
+	boundaries map[string]*model.BoundaryPolicy,
+	scps []model.SCPPolicy,
+	resourcePolicies map[string]model.ResourcePolicy,
 ) *ACLBuilder {
-	return &ACLBuilder{
-		role:              role,
-		principals:        principals,
-		policies:          identityPolicies,
-		boundaryPolicies:  boundaryStatements,
-		scpPolicies:       scpStatements,
-		resourcePolicies:  resourceStatements,
-		acl:               make([]model.AccessControlRule, 0, 100),
-		hasBoundaryPolicy: len(boundaryStatements) > 0,
-		hasSCPPolicies:    len(scpStatements) > 0,
+	builder := &ACLBuilder{
+		acl: make([]model.AccessControlRule, 0, 100),
+	}
+
+	// Extract boundary statements per principal
+	boundaryStatements := make([]Statement, 0)
+	for _, boundary := range boundaries {
+		if boundary != nil && boundary.Statements != nil {
+			if stmts, ok := boundary.Statements.([]Statement); ok {
+				boundaryStatements = append(boundaryStatements, stmts...)
+			}
+		}
+	}
+	builder.boundaryPolicies = boundaryStatements
+	builder.hasBoundaryPolicy = len(boundaryStatements) > 0
+
+	// Extract SCP statements
+	scpStatements := make([]Statement, 0)
+	for _, scp := range scps {
+		if scp.Statements != nil {
+			if stmts, ok := scp.Statements.([]Statement); ok {
+				scpStatements = append(scpStatements, stmts...)
+			}
+		}
+	}
+	builder.scpPolicies = scpStatements
+	builder.hasSCPPolicies = len(scpStatements) > 0
+
+	// Extract resource policy statements
+	resourceStatements := make([]Statement, 0)
+	for _, resourcePolicy := range resourcePolicies {
+		if resourcePolicy.Statements != nil {
+			if stmts, ok := resourcePolicy.Statements.([]Statement); ok {
+				resourceStatements = append(resourceStatements, stmts...)
+			}
+		}
+	}
+	builder.resourcePolicies = resourceStatements
+
+	// Build rules from identity policies
+	builder.buildFromIdentityPolicies(identityPolicies)
+
+	return builder
+}
+
+func (b *ACLBuilder) buildFromIdentityPolicies(identityPolicies []model.IdentityPolicy) {
+	for _, identityPolicy := range identityPolicies {
+		if identityPolicy.Statements == nil {
+			continue
+		}
+		stmts, ok := identityPolicy.Statements.([]Statement)
+		if !ok {
+			continue
+		}
+		for _, stmt := range stmts {
+			b.processIdentityStatement(identityPolicy.Principal, &stmt)
+		}
+	}
+}
+
+func (b *ACLBuilder) processIdentityStatement(principal string, s *Statement) {
+	// Skip Deny statements in identity policies (they're not used for Allow rules,
+	// but should trigger explicit deny evaluation in Step 1)
+	if s.Effect == "Deny" {
+		return
+	}
+	for _, r := range s.Resources {
+		b.processIdentityRules(principal, r, s.Actions)
+	}
+}
+
+func (b *ACLBuilder) processIdentityRules(principal string, r string, al []string) {
+	for _, a := range al {
+		rule := model.AccessControlRule{
+			Principal: model.Principal{ID: principal},
+			Permission: model.Permission{
+				ID: a,
+			},
+			Resource: model.Resource{ID: r},
+			GrantChain: []model.GrantIface{
+				// For identity policies, grant is from the principal itself
+				model.NewRoleGrant(principal),
+			},
+		}
+		b.acl = append(b.acl, rule)
 	}
 }
 
@@ -91,33 +164,23 @@ func (b *ACLBuilder) SetResourcePolicies(resourceStatements []Statement) *ACLBui
 // Step 4: SCP Filtering - Remove actions explicitly denied by any SCP at account/OU level
 // Step 5: Resource Policy Expansion - If resource policies present, create additional rules for external principals
 func (b *ACLBuilder) Build() []model.AccessControlRule {
-	// Step 2: Generate base rules from identity policies
-	for _, po := range b.policies {
-		for _, pr := range b.principals {
-			b.processStatements(&pr, &po)
-		}
+	// Step 1: Check for explicit denies across all policies (identity, boundary, SCP, resource)
+	// If an explicit deny is found, we should not proceed with allowing actions
+	deniedActions := b.getExplicitDeniedActions()
+
+	// Step 3: Apply permission boundary intersection
+	if b.hasBoundaryPolicy {
+		b.acl = b.intersectWithBoundary(b.acl, b.boundaryPolicies)
 	}
 
-	// If we have advanced policies (boundaries, SCPs, resource policies), apply them
-	if b.hasBoundaryPolicy || b.hasSCPPolicies {
-		// Step 1: Check for explicit denies across all policies (identity, boundary, SCP, resource)
-		// If an explicit deny is found, we should not proceed with allowing actions
-		deniedActions := b.getExplicitDeniedActions()
+	// Step 4: Filter rules by SCP explicit denies
+	if b.hasSCPPolicies {
+		b.acl = b.filterBySCP(b.acl, b.scpPolicies, deniedActions)
+	}
 
-		// Step 3: Apply permission boundary intersection
-		if b.hasBoundaryPolicy {
-			b.acl = b.intersectWithBoundary(b.acl, b.boundaryPolicies)
-		}
-
-		// Step 4: Filter rules by SCP explicit denies
-		if b.hasSCPPolicies {
-			b.acl = b.filterBySCP(b.acl, b.scpPolicies, deniedActions)
-		}
-
-		// Step 5: Extract and process resource policy principals
-		if len(b.resourcePolicies) > 0 {
-			b.acl = b.processResourcePolicies(b.acl, b.resourcePolicies)
-		}
+	// Step 5: Extract and process resource policy principals
+	if len(b.resourcePolicies) > 0 {
+		b.acl = b.processResourcePolicies(b.acl, b.resourcePolicies)
 	}
 
 	return b.acl
