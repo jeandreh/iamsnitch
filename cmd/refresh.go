@@ -9,7 +9,7 @@ import (
 
 var (
 	resourceServices []string
-	refreshCmd = &cobra.Command{
+	refreshCmd       = &cobra.Command{
 		Use:   "refresh",
 		Short: "Refresh access control list from cloud provider",
 		RunE:  runRefreshCmd,

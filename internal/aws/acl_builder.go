@@ -112,8 +112,12 @@ func (b *ACLBuilder) processIdentityStatement(principal string, s *Statement) {
 	if s.Effect == "Deny" {
 		return
 	}
+
+	// Combine Actions and NotActions for processing
+	allActions := append(s.Actions, s.NotActions...)
+
 	for _, r := range s.Resources {
-		b.processIdentityRules(principal, r, s.Actions)
+		b.processIdentityRules(principal, r, allActions)
 	}
 }
 
@@ -194,14 +198,18 @@ func (b *ACLBuilder) processStatements(pr *Principal, po *IdentityPolicy) {
 		if s.Effect == "Deny" {
 			continue
 		}
-		b.processStatement(pr, po, &s)
+
+		// Combine Actions and NotActions for processing
+		allActions := append(s.Actions, s.NotActions...)
+
+		b.processStatement(pr, po, &s, allActions)
 	}
 }
 
 // processStatement processes a single statement to generate rules for each resource-action combination.
-func (b *ACLBuilder) processStatement(pr *Principal, po *IdentityPolicy, s *Statement) {
+func (b *ACLBuilder) processStatement(pr *Principal, po *IdentityPolicy, s *Statement, actions []string) {
 	for _, r := range s.Resources {
-		b.processRules(pr, po, r, s.Actions)
+		b.processRules(pr, po, r, actions)
 	}
 }
 
@@ -234,7 +242,8 @@ func (b *ACLBuilder) getExplicitDeniedActions() map[string]bool {
 	for _, po := range b.policies {
 		for _, s := range po.Statements {
 			if s.Effect == "Deny" {
-				for _, action := range s.Actions {
+				allActions := append(s.Actions, s.NotActions...)
+				for _, action := range allActions {
 					deniedActions[action] = true
 				}
 			}
@@ -244,7 +253,8 @@ func (b *ACLBuilder) getExplicitDeniedActions() map[string]bool {
 	// Check boundary policies for explicit denies (though boundaries typically only Allow)
 	for _, s := range b.boundaryPolicies {
 		if s.Effect == "Deny" {
-			for _, action := range s.Actions {
+			allActions := append(s.Actions, s.NotActions...)
+			for _, action := range allActions {
 				deniedActions[action] = true
 			}
 		}
@@ -253,7 +263,8 @@ func (b *ACLBuilder) getExplicitDeniedActions() map[string]bool {
 	// Check SCP policies for explicit denies (SCPs can contain both Allow and Deny)
 	for _, s := range b.scpPolicies {
 		if s.Effect == "Deny" {
-			for _, action := range s.Actions {
+			allActions := append(s.Actions, s.NotActions...)
+			for _, action := range allActions {
 				deniedActions[action] = true
 			}
 		}
@@ -284,7 +295,8 @@ func (b *ACLBuilder) intersectWithBoundary(rules []model.AccessControlRule, boun
 	boundaryActions := make(map[string]bool)
 	for _, s := range boundaryStatements {
 		if s.Effect == "Allow" {
-			for _, action := range s.Actions {
+			allActions := append(s.Actions, s.NotActions...)
+			for _, action := range allActions {
 				boundaryActions[action] = true
 			}
 		}
@@ -314,7 +326,8 @@ func (b *ACLBuilder) filterBySCP(rules []model.AccessControlRule, scpStatements 
 	scpDeniedActions := make(map[string]bool)
 	for _, s := range scpStatements {
 		if s.Effect == "Deny" {
-			for _, action := range s.Actions {
+			allActions := append(s.Actions, s.NotActions...)
+			for _, action := range allActions {
 				scpDeniedActions[action] = true
 			}
 		}
@@ -350,7 +363,8 @@ func (b *ACLBuilder) processResourcePolicies(rules []model.AccessControlRule, re
 		// Extract the principals from the statement
 		for _, principal := range s.Principals.Items {
 			for _, resource := range s.Resources {
-				for _, action := range s.Actions {
+				allActions := append(s.Actions, s.NotActions...)
+				for _, action := range allActions {
 					// Create a new rule for the external principal
 					rule := model.AccessControlRule{
 						Principal: model.Principal{ID: principal.String()},
@@ -452,7 +466,8 @@ func (b *ACLBuilder) isBoundaryEnabled() bool {
 func (b *ACLBuilder) isActionDeniedBySCP(action string) bool {
 	for _, s := range b.scpPolicies {
 		if s.Effect == "Deny" {
-			for _, deniedAction := range s.Actions {
+			allActions := append(s.Actions, s.NotActions...)
+			for _, deniedAction := range allActions {
 				if matchesWildcard(action, deniedAction) {
 					return true
 				}

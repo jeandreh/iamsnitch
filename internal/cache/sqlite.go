@@ -3,6 +3,7 @@ package cache
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/jeandreh/iam-snitch/internal/domain/model"
 	"github.com/mattn/go-sqlite3"
@@ -131,6 +132,178 @@ func new(connStr string, config *gorm.Config) (*SQLiteCache, error) {
 }
 
 func match(s1, s2 string) bool {
+	// Special case: if s1 is an ARN and s2 contains wildcards, use AWS ARN matching
+	if strings.HasPrefix(s1, "arn:") && strings.Contains(s2, "*") {
+		return matchUnidirectional(s1, s2)
+	}
+
+	// If either string contains wildcards, use complex bidirectional matching
+	if strings.Contains(s1, "*") || strings.Contains(s2, "*") {
+		return matchComplex(s1, s2)
+	}
+
+	// Otherwise, assume s1 is stored value, s2 is user pattern
+	return matchUnidirectional(s1, s2)
+}
+
+func matchUnidirectional(storedValue, userPattern string) bool {
+	if userPattern == "*" {
+		return true
+	}
+
+	if storedValue == userPattern {
+		return true
+	}
+
+	// For ARN-like stored values, use segment-aware matching
+	if strings.HasPrefix(storedValue, "arn:") {
+		return matchARNPattern(storedValue, userPattern)
+	}
+
+	// For other values (permissions, etc.), use simple glob matching
+	return matchSimpleGlob(userPattern, storedValue)
+}
+
+func matchARNPattern(arn, pattern string) bool {
+	// Check if pattern is just "*"
+	if pattern == "*" {
+		return true
+	}
+
+	// If pattern doesn't contain wildcards, exact match
+	if !strings.Contains(pattern, "*") {
+		return arn == pattern
+	}
+
+	// Apply AWS ARN wildcard rules: * doesn't cross segment boundaries
+	arnSegments := splitARNByDelimiters(arn)
+	patternSegments := splitARNByDelimiters(pattern)
+
+	// Must have same number of segments
+	if len(arnSegments) != len(patternSegments) {
+		return false
+	}
+
+	// Compare segment by segment
+	for i := 0; i < len(arnSegments); i++ {
+		if !matchSegment(patternSegments[i], arnSegments[i]) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func matchSimpleGlob(pattern, str string) bool {
+	// Simple glob matching for permissions like "s3:Get*"
+	if !strings.Contains(pattern, "*") {
+		return pattern == str
+	}
+
+	parts := strings.Split(pattern, "*")
+	if len(parts) == 1 {
+		return false
+	}
+
+	// Check prefix
+	if len(parts[0]) > 0 && !strings.HasPrefix(str, parts[0]) {
+		return false
+	}
+
+	// Check suffix
+	lastPart := parts[len(parts)-1]
+	if len(lastPart) > 0 && !strings.HasSuffix(str, lastPart) {
+		return false
+	}
+
+	// Check middle parts are present in order
+	checkStart := len(parts[0])
+	for i := 1; i < len(parts)-1; i++ {
+		part := parts[i]
+		if len(part) == 0 {
+			continue
+		}
+		pos := strings.Index(str[checkStart:], part)
+		if pos == -1 {
+			return false
+		}
+		checkStart += pos + len(part)
+	}
+
+	return true
+}
+
+func splitARNByDelimiters(s string) []string {
+	var segments []string
+	var current strings.Builder
+
+	for _, r := range s {
+		if r == ':' || r == '/' {
+			if current.Len() > 0 {
+				segments = append(segments, current.String())
+				current.Reset()
+			}
+			segments = append(segments, string(r))
+		} else {
+			current.WriteRune(r)
+		}
+	}
+
+	if current.Len() > 0 {
+		segments = append(segments, current.String())
+	}
+
+	return segments
+}
+
+func matchSegment(pattern, str string) bool {
+	if pattern == "*" {
+		return true
+	}
+
+	if pattern == str {
+		return true
+	}
+
+	// Simple glob matching within the segment
+	if !strings.Contains(pattern, "*") {
+		return false
+	}
+
+	parts := strings.Split(pattern, "*")
+	if len(parts) == 1 {
+		return false
+	}
+
+	// Check prefix
+	if len(parts[0]) > 0 && !strings.HasPrefix(str, parts[0]) {
+		return false
+	}
+
+	// Check suffix
+	lastPart := parts[len(parts)-1]
+	if len(lastPart) > 0 && !strings.HasSuffix(str, lastPart) {
+		return false
+	}
+
+	// Check middle parts are present in order
+	checkStart := len(parts[0])
+	for i := 1; i < len(parts)-1; i++ {
+		part := parts[i]
+		if len(part) == 0 {
+			continue
+		}
+		pos := strings.Index(str[checkStart:], part)
+		if pos == -1 {
+			return false
+		}
+		checkStart += pos + len(part)
+	}
+
+	return true
+}
+
+func matchComplex(s1, s2 string) bool {
 	var i1, i2 int
 
 	for i1 < len(s1) && i2 < len(s2) {

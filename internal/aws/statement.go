@@ -9,6 +9,7 @@ type Statement struct {
 	Effect     string                            `json:"Effect"`
 	Principals PrincipalList                     `json:"Principal"`
 	Actions    []string                          `json:"Action"`
+	NotActions []string                          `json:"NotAction"` // Added NotAction field
 	Resources  []string                          `json:"Resource"`
 	Conditions map[string]map[string]interface{} `json:"Condition"`
 }
@@ -32,10 +33,27 @@ func (s *Statement) UnmarshalJSON(data []byte) error {
 
 	actions, ok := mapStmt["Action"]
 	if !ok {
-		return fmt.Errorf("field Statement.Action is invalid in statement JSON payload")
+		// Check for NotAction as well
+		actions, ok = mapStmt["NotAction"]
+		if !ok {
+			// Debug: print the available keys
+			var keys []string
+			for k := range mapStmt {
+				keys = append(keys, k)
+			}
+			return fmt.Errorf("field Statement.Action or NotAction is invalid in statement JSON payload. Available fields: %v", keys)
+		}
 	}
 	if err := s.unmarshalActions(actions); err != nil {
 		return err
+	}
+
+	// Also check for NotAction separately if both are present
+	notActions, ok := mapStmt["NotAction"]
+	if ok {
+		if err := s.unmarshalNotActions(notActions); err != nil {
+			return err
+		}
 	}
 
 	principals, ok := mapStmt["Principal"]
@@ -92,6 +110,24 @@ func (s *Statement) unmarshalActions(data interface{}) error {
 		return nil
 	}
 	return fmt.Errorf("unknown Actions format")
+}
+
+func (s *Statement) unmarshalNotActions(data interface{}) error {
+	switch pl := data.(type) {
+	case []interface{}:
+		for _, i := range pl {
+			spl, ok := i.(string)
+			if !ok {
+				return fmt.Errorf("NotActions is not a list of string")
+			}
+			s.NotActions = append(s.NotActions, spl)
+		}
+		return nil
+	case string:
+		s.NotActions = append(s.NotActions, pl)
+		return nil
+	}
+	return fmt.Errorf("unknown NotActions format")
 }
 
 func (s *Statement) unmarshalResources(data interface{}) error {
