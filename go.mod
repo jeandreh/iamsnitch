@@ -9,7 +9,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/iam v1.2.0
 	github.com/golang/mock v1.6.0
 	github.com/mattn/go-sqlite3 v1.14.5
-	github.com/sirupsen/logrus v1.8.1
+	github.com/sirupsen/logrus v1.8.3
 	github.com/spf13/cobra v1.2.1
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/mock v0.6.0
