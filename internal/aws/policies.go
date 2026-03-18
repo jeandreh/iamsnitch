@@ -20,11 +20,6 @@ type AssumePolicy struct {
 	Policy
 }
 
-type ResourcePolicy struct {
-	ResourceID uint
-	Policy
-}
-
 func NewIdentityPolicy(arn string, name string, policyDocument string) (*IdentityPolicy, error) {
 	var policy IdentityPolicy
 

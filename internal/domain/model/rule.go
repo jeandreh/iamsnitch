@@ -6,10 +6,11 @@ import (
 )
 
 type AccessControlRule struct {
-	Principal  Principal
-	Permission Permission
-	Resource   Resource
-	GrantChain []GrantIface
+	Principal           Principal
+	Permission          Permission
+	Resource            Resource
+	GrantChain          []GrantIface
+	UncheckedConditions []Condition
 }
 
 func (a *AccessControlRule) ID() string {

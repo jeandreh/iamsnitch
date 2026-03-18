@@ -8,7 +8,8 @@ import (
 )
 
 var (
-	refreshCmd = &cobra.Command{
+	resourceServices []string
+	refreshCmd       = &cobra.Command{
 		Use:   "refresh",
 		Short: "Refresh access control list from cloud provider",
 		RunE:  runRefreshCmd,
@@ -16,6 +17,7 @@ var (
 )
 
 func init() {
+	refreshCmd.Flags().StringSliceVar(&resourceServices, "resource-policies", []string{}, "Comma-separated list of services to include resource policies for (s3,sqs,kms,lambda,secretsmanager)")
 	rootCmd.AddCommand(refreshCmd)
 }
 
@@ -35,7 +37,7 @@ func runRefreshCmd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := accessService.RefreshACL(); err != nil {
+	if err := accessService.RefreshACL(resourceServices); err != nil {
 		return err
 	}
 	return nil

@@ -2,7 +2,6 @@ package aws
 
 import (
 	"context"
-	"fmt"
 	"net/url"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -38,7 +37,7 @@ func NewIAMProvider(cfg *aws.Config) (as *IAMProvider, err error) {
 	return as, err
 }
 
-func (a *IAMProvider) FetchACL(page ports.PageIface) ([]model.AccessControlRule, ports.PageIface, error) {
+func (a *IAMProvider) FetchIdentityPolicies(page ports.PageIface) ([]model.IdentityPolicy, ports.PageIface, error) {
 	roles, nextPage, err := a.fetchRoles(page)
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
@@ -48,35 +47,26 @@ func (a *IAMProvider) FetchACL(page ports.PageIface) ([]model.AccessControlRule,
 		return nil, nil, err
 	}
 
-	var acl []model.AccessControlRule
+	var identityPolicies []model.IdentityPolicy
 	for _, role := range roles {
-		principals, err := a.getPrincipals(&role)
-		if err != nil {
-			logrus.WithFields(logrus.Fields{
-				"role":      *(role.Arn),
-				"principal": *role.AssumeRolePolicyDocument,
-				"error":     err,
-			}).Error("failed to fetch principal from trust policy")
-			continue
-		}
-
-		policies, err := a.fetchAttachedPolicies(&role)
+		statements, err := a.fetchRolePolicyStatements(&role)
 		if err != nil {
 			logrus.WithFields(logrus.Fields{
 				"role":  *(role.Arn),
 				"error": err,
-			}).Error("failed to fetch policies attached to role")
+			}).Error("failed to fetch policy statements for role")
 			continue
+		}
+
+		identityPolicy := model.IdentityPolicy{
+			Principal:  *role.Arn,
+			Statements: statements,
+		}
+
+		identityPolicies = append(identityPolicies, identityPolicy)
 	}
 
-		newRules := NewACLBuilder(role, principals, policies).Build()
-
-		fmt.Printf("%v rules found for role %v\n", len(newRules), *role.RoleName)
-
-		acl = append(acl, newRules...)
-	}
-
-	return acl, nextPage, nil
+	return identityPolicies, nextPage, nil
 }
 
 func (a *IAMProvider) fetchRoles(pageToken ports.PageIface) ([]types.Role, ports.PageIface, error) {
@@ -108,7 +98,27 @@ func (a *IAMProvider) getPrincipals(role *types.Role) ([]Principal, error) {
 	return assumePolicy.Statements[0].Principals.Items, nil
 }
 
-func (a *IAMProvider) fetchAttachedPolicies(role *types.Role) ([]IdentityPolicy, error) {
+func (a *IAMProvider) fetchRolePolicyStatements(role *types.Role) ([]Statement, error) {
+	var allStatements []Statement
+
+	// Fetch attached policies
+	attachedPolicies, err := a.fetchAttachedPolicyStatements(role)
+	if err != nil {
+		return nil, err
+	}
+	allStatements = append(allStatements, attachedPolicies...)
+
+	// Fetch inline policies
+	inlinePolicies, err := a.fetchInlinePolicyStatements(role)
+	if err != nil {
+		return nil, err
+	}
+	allStatements = append(allStatements, inlinePolicies...)
+
+	return allStatements, nil
+}
+
+func (a *IAMProvider) fetchAttachedPolicyStatements(role *types.Role) ([]Statement, error) {
 	lp, err := a.cli.ListAttachedRolePolicies(a.ctx, &iam.ListAttachedRolePoliciesInput{
 		RoleName: role.RoleName,
 	})
@@ -116,20 +126,52 @@ func (a *IAMProvider) fetchAttachedPolicies(role *types.Role) ([]IdentityPolicy,
 		return nil, err
 	}
 
-	policies := make([]IdentityPolicy, 0, len(lp.AttachedPolicies))
+	var statements []Statement
 	for _, attachedRolePolicy := range lp.AttachedPolicies {
-		np, err := a.fetchIdentityPolicy(&attachedRolePolicy)
+		policyStatements, err := a.fetchPolicyStatements(attachedRolePolicy.PolicyArn)
 		if err != nil {
 			return nil, err
 		}
-		policies = append(policies, *np)
+		statements = append(statements, policyStatements...)
 	}
-	return policies, nil
+	return statements, nil
 }
 
-func (a *IAMProvider) fetchIdentityPolicy(ap *types.AttachedPolicy) (*IdentityPolicy, error) {
+func (a *IAMProvider) fetchInlinePolicyStatements(role *types.Role) ([]Statement, error) {
+	lip, err := a.cli.ListRolePolicies(a.ctx, &iam.ListRolePoliciesInput{
+		RoleName: role.RoleName,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var statements []Statement
+	for _, policyName := range lip.PolicyNames {
+		policyDoc, err := a.cli.GetRolePolicy(a.ctx, &iam.GetRolePolicyInput{
+			RoleName:   role.RoleName,
+			PolicyName: &policyName,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		pd, err := url.QueryUnescape(*policyDoc.PolicyDocument)
+		if err != nil {
+			return nil, err
+		}
+
+		policy, err := NewIdentityPolicy("", policyName, pd)
+		if err != nil {
+			return nil, err
+		}
+		statements = append(statements, policy.Statements...)
+	}
+	return statements, nil
+}
+
+func (a *IAMProvider) fetchPolicyStatements(policyArn *string) ([]Statement, error) {
 	gp, err := a.cli.GetPolicy(a.ctx, &iam.GetPolicyInput{
-		PolicyArn: ap.PolicyArn,
+		PolicyArn: policyArn,
 	})
 	if err != nil {
 		return nil, err
@@ -148,9 +190,33 @@ func (a *IAMProvider) fetchIdentityPolicy(ap *types.AttachedPolicy) (*IdentityPo
 		return nil, err
 	}
 
-	np, err := NewIdentityPolicy(*gp.Policy.Arn, *gp.Policy.PolicyName, pd)
+	policy, err := NewIdentityPolicy(*gp.Policy.Arn, *gp.Policy.PolicyName, pd)
 	if err != nil {
 		return nil, err
 	}
-	return np, nil
+	return policy.Statements, nil
+}
+
+// FetchPermissionBoundaries fetches permission boundary policies for given principals.
+// Phase 2 placeholder: Returns empty map until AWS API integration is implemented.
+func (a *IAMProvider) FetchPermissionBoundaries(principals []string) (map[string]*model.BoundaryPolicy, error) {
+	// TODO: Phase 2 - Implement AWS API calls to fetch permission boundaries
+	// using iam.GetUserPermissionsBoundary() and iam.GetRolePermissionsBoundary()
+	return make(map[string]*model.BoundaryPolicy), nil
+}
+
+// FetchSCPs fetches all Service Control Policies for the account.
+// Phase 2 placeholder: Returns empty slice until AWS API integration is implemented.
+func (a *IAMProvider) FetchSCPs() ([]model.SCPPolicy, error) {
+	// TODO: Phase 2 - Implement AWS API calls to fetch SCPs
+	// using organizations.ListPolicies() with PolicyType="SERVICE_CONTROL_POLICY"
+	return make([]model.SCPPolicy, 0), nil
+}
+
+// FetchResourcePolicies fetches resource-based policies for specified services.
+// Phase 2 placeholder: Returns empty map until AWS API integration is implemented.
+func (a *IAMProvider) FetchResourcePolicies(services []string) (map[string]model.ResourcePolicy, error) {
+	// TODO: Phase 2 - Implement AWS API calls to fetch resource policies
+	// by service type (S3, SQS, SNS, KMS, Secrets Manager, Lambda)
+	return make(map[string]model.ResourcePolicy), nil
 }
