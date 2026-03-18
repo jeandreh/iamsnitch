@@ -65,17 +65,36 @@ func runWhoCan(cmd *cobra.Command, args []string) error {
 }
 
 func printOutput(acl []model.AccessControlRule) {
-	for _, r := range acl {
-		fmt.Printf("principal: %s\n", r.Principal.ID)
-		fmt.Printf("permission: %s\n", r.Permission.ID)
-		fmt.Printf("resource: %s\n", r.Resource.ID)
-		fmt.Println("via: ")
+	if len(acl) == 0 {
+		fmt.Println("No matching access control rules found.")
+		return
+	}
 
-		tabs := " "
-		for _, g := range r.GrantChain {
-			fmt.Printf("%v|-> %v\n", tabs, g)
-			tabs += " "
+	fmt.Printf("Found %d matching access control rules:\n\n", len(acl))
+
+	for i, r := range acl {
+		fmt.Printf("─── Rule %d ──────────────────────────────────────────────────────────────\n", i+1)
+		fmt.Printf("Principal:  %s\n", r.Principal.ID)
+		fmt.Printf("Permission: %s\n", r.Permission.ID)
+		fmt.Printf("Resource:   %s\n", r.Resource.ID)
+
+		if len(r.UncheckedConditions) > 0 {
+			fmt.Println("Unchecked Conditions:")
+			for _, c := range r.UncheckedConditions {
+				fmt.Printf("  • %s %s %v\n", c.Operator, c.Key, c.Value)
+			}
 		}
-		fmt.Println("")
+
+		fmt.Println("Grant Chain:")
+		for j, g := range r.GrantChain {
+			prefix := "  "
+			if j > 0 {
+				prefix = "    └── "
+			} else {
+				prefix = "  └── "
+			}
+			fmt.Printf("%s%s\n", prefix, g)
+		}
+		fmt.Println()
 	}
 }

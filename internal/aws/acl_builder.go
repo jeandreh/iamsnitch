@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/service/iam/types"
+	"github.com/jeandreh/iam-snitch/internal/conditions"
 	"github.com/jeandreh/iam-snitch/internal/domain/model"
 )
 
@@ -23,6 +24,11 @@ type ACLBuilder struct {
 	scpPolicies       []Statement // SCP statements (explicit denies filter rules)
 	resourcePolicies  []Statement // Resource policy statements (external principals)
 	acl               []model.AccessControlRule
+	
+	// conditionCtx is used to evaluate policy conditions at refresh time.
+	// It can be extended to include additional context (resource tags, etc.).
+	conditionCtx conditions.ConditionContext
+	
 	hasBoundaryPolicy bool // Flag to track if boundaries are configured
 	hasSCPPolicies    bool // Flag to track if SCPs are configured
 }
@@ -31,10 +37,11 @@ type ACLBuilder struct {
 // This path bypasses boundary, SCP, and resource policy evaluation for performance.
 func NewACLBuilder(role types.Role, principals []Principal, policies []IdentityPolicy) *ACLBuilder {
 	return &ACLBuilder{
-		role:       role,
-		principals: principals,
-		policies:   policies,
-		acl:        make([]model.AccessControlRule, 0, 100),
+		role:         role,
+		principals:   principals,
+		policies:     policies,
+		acl:          make([]model.AccessControlRule, 0, 100),
+		conditionCtx: conditions.ConditionContext{},
 	}
 }
 
@@ -91,6 +98,13 @@ func NewACLBuilderWithPolicies(
 	return builder
 }
 
+// SetConditionContext sets the refresh-time context used to evaluate policy conditions.
+// It can be used to inject resource tags, principal tags, and other information.
+func (b *ACLBuilder) SetConditionContext(ctx conditions.ConditionContext) *ACLBuilder {
+	b.conditionCtx = ctx
+	return b
+}
+
 func (b *ACLBuilder) buildFromIdentityPolicies(identityPolicies []model.IdentityPolicy) {
 	for _, identityPolicy := range identityPolicies {
 		if identityPolicy.Statements == nil {
@@ -117,11 +131,19 @@ func (b *ACLBuilder) processIdentityStatement(principal string, s *Statement) {
 	allActions := append(s.Actions, s.NotActions...)
 
 	for _, r := range s.Resources {
-		b.processIdentityRules(principal, r, allActions)
+		ctx := b.conditionCtx
+		ctx.ResourceARN = r
+
+		matched, unchecked := conditions.EvaluateConditions(s.Conditions, ctx)
+		if !matched {
+			continue
+		}
+
+		b.processIdentityRules(principal, r, allActions, unchecked)
 	}
 }
 
-func (b *ACLBuilder) processIdentityRules(principal string, r string, al []string) {
+func (b *ACLBuilder) processIdentityRules(principal string, r string, al []string, unchecked []model.Condition) {
 	for _, a := range al {
 		rule := model.AccessControlRule{
 			Principal: model.Principal{ID: principal},
@@ -133,6 +155,7 @@ func (b *ACLBuilder) processIdentityRules(principal string, r string, al []strin
 				// For identity policies, grant is from the principal itself
 				model.NewRoleGrant(principal),
 			},
+			UncheckedConditions: unchecked,
 		}
 		b.acl = append(b.acl, rule)
 	}
