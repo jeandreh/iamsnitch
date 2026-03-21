@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/golang/mock/gomock"
+	"go.uber.org/mock/gomock"
 	"github.com/jeandreh/iam-snitch/internal/domain/model"
 	"github.com/jeandreh/iam-snitch/internal/mocks"
 	"github.com/stretchr/testify/require"
@@ -58,37 +58,37 @@ func TestRefreshACL(t *testing.T) {
 
 			iamMock.
 				EXPECT().
-				FetchACL(nil).
-				Return(tt.want, pageMock, tt.wantErrFetch).
+				FetchIdentityPolicies(nil).
+				Return([]model.IdentityPolicy{}, pageMock, tt.wantErrFetch).
 				Times(1)
 
 			if tt.wantErrFetch == nil {
-				cacheMock.
-					EXPECT().
-					SaveACL(gomock.Eq(tt.want)).
-					Return(tt.wantErrSave).
-					Times(1)
-
-				if tt.wantErrSave == nil {
-					pageMock.
-						EXPECT().
-						HasNext().
-						Return(false).
-						Times(1)
-				}
-
-			} else {
-				cacheMock.
-					EXPECT().
-					SaveACL(gomock.Any()).
-					Times(0)
 				pageMock.
 					EXPECT().
 					HasNext().
-					Times(0)
+					Return(false).
+					Times(1)
+
+				iamMock.
+					EXPECT().
+					FetchPermissionBoundaries(gomock.Any()).
+					Return(map[string]*model.BoundaryPolicy{}, nil).
+					Times(1)
+
+				iamMock.
+					EXPECT().
+					FetchSCPs().
+					Return([]model.SCPPolicy{}, nil).
+					Times(1)
+
+				cacheMock.
+					EXPECT().
+					SaveACL(gomock.Any()).
+					Return(tt.wantErrSave).
+					Times(1)
 			}
 
-			require.Equal(t, tt.wantErr, a.RefreshACL())
+			require.Equal(t, tt.wantErr, a.RefreshACL([]string{}))
 		})
 	}
 }
@@ -159,7 +159,7 @@ func TestWhoCan(t *testing.T) {
 
 			iamMock.
 				EXPECT().
-				FetchACL(nil).
+				FetchIdentityPolicies(gomock.Any()).
 				Times(0)
 
 			cacheMock.

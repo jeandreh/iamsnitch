@@ -7,13 +7,13 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/iam/types"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/golang/mock/gomock"
+	"go.uber.org/mock/gomock"
 	"github.com/jeandreh/iam-snitch/internal/domain/model"
 	"github.com/jeandreh/iam-snitch/internal/mocks"
 	"github.com/stretchr/testify/require"
 )
 
-func TestFetchACL(t *testing.T) {
+func TestFetchIdentityPolicies(t *testing.T) {
 	type args struct {
 		listRolesOutput        *iam.ListRolesOutput
 		rolePoliciesOutput     *iam.ListAttachedRolePoliciesOutput
@@ -23,7 +23,7 @@ func TestFetchACL(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    []model.AccessControlRule
+		want    []model.IdentityPolicy
 		wantErr error
 	}{
 		{
@@ -80,25 +80,14 @@ func TestFetchACL(t *testing.T) {
 					},
 				},
 			},
-			[]model.AccessControlRule{
+			[]model.IdentityPolicy{
 				{
-					Principal: model.Principal{ID: "Service[s3.amazonaws.com]"},
-					Resource:  model.Resource{ID: "someresource"},
-					Permission: model.Permission{
-						ID: "someaction",
-					},
-					GrantChain: []model.GrantIface{
-						model.RoleGrant{
-							Grant: model.Grant{
-								Type: "Role",
-								ID:   "arn:role",
-							},
-						},
-						model.PolicyGrant{
-							Grant: model.Grant{
-								Type: "Policy",
-								ID:   "arn:policy",
-							},
+					Principal: "arn:role",
+					Statements: []Statement{
+						{
+							Effect:    "Allow",
+							Actions:   []string{"someaction"},
+							Resources: []string{"someresource"},
 						},
 					},
 				},
@@ -160,25 +149,14 @@ func TestFetchACL(t *testing.T) {
 					},
 				},
 			},
-			[]model.AccessControlRule{
+			[]model.IdentityPolicy{
 				{
-					Principal: model.Principal{ID: "Service[s3.amazonaws.com]"},
-					Resource:  model.Resource{ID: "someresource"},
-					Permission: model.Permission{
-						ID: "someaction",
-					},
-					GrantChain: []model.GrantIface{
-						model.RoleGrant{
-							Grant: model.Grant{
-								Type: "Role",
-								ID:   "arn:role",
-							},
-						},
-						model.PolicyGrant{
-							Grant: model.Grant{
-								Type: "Policy",
-								ID:   "arn:policy",
-							},
+					Principal: "arn:role",
+					Statements: []Statement{
+						{
+							Effect:    "Allow",
+							Actions:   []string{"someaction"},
+							Resources: []string{"someresource"},
 						},
 					},
 				},
@@ -218,6 +196,19 @@ func TestFetchACL(t *testing.T) {
 
 			iamMock.
 				EXPECT().
+				ListRolePolicies(
+					gomock.Eq(ctx),
+					gomock.Eq(&iam.ListRolePoliciesInput{
+						RoleName: tt.args.listRolesOutput.Roles[0].RoleName,
+					}),
+				).
+				Return(&iam.ListRolePoliciesOutput{
+					PolicyNames: []string{},
+				}, nil).
+				Times(1)
+
+			iamMock.
+				EXPECT().
 				GetPolicy(
 					gomock.Eq(ctx),
 					gomock.Eq(&iam.GetPolicyInput{
@@ -239,11 +230,11 @@ func TestFetchACL(t *testing.T) {
 				Return(tt.args.getPolicyVersionOutput, nil).
 				Times(1)
 
-			acl, nextPage, err := a.FetchACL(nil)
+			policies, nextPage, err := a.FetchIdentityPolicies(nil)
 
 			require.Equal(t, tt.wantErr, err)
 			require.Equal(t, tt.args.listRolesOutput.Marker, nextPage.Next())
-			require.Equal(t, tt.want, acl)
+			require.Equal(t, tt.want, policies)
 		})
 	}
 }

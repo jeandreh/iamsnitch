@@ -3,17 +3,16 @@ package aws
 import (
 	"testing"
 
-	"github.com/aws/aws-sdk-go-v2/service/iam/types"
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/jeandreh/iam-snitch/internal/domain/model"
 	"github.com/stretchr/testify/require"
 )
 
 func TestBuildACL(t *testing.T) {
 	type fields struct {
-		role       types.Role
-		principals []Principal
-		policies   []IdentityPolicy
+		identityPolicies []model.IdentityPolicy
+		boundaries       map[string]*model.BoundaryPolicy
+		scps             []model.SCPPolicy
+		resourcePolicies map[string]model.ResourcePolicy
 	}
 	tests := []struct {
 		name   string
@@ -23,40 +22,26 @@ func TestBuildACL(t *testing.T) {
 		{
 			"single action",
 			fields{
-				types.Role{
-					Arn:      aws.String("arn:aws:iam::111122223333:role/SomeRole"),
-					RoleName: aws.String("SomeRole"),
-				},
-				[]Principal{
+				identityPolicies: []model.IdentityPolicy{
 					{
-						Type: AWS,
-						ID:   "arn:aws:iam::111122223333:role/TestRole",
-					},
-				},
-				[]IdentityPolicy{
-					{
-						ARN:  "arn:aws:iam::111122223333:policy/TestPolicy",
-						Name: "TestPolicy",
-						Policy: Policy{
-							Version: "2012-10-17",
-							Statements: []Statement{
-								{
-									Effect:  "Allow",
-									Actions: []string{"ec2:CreateInstance"},
-									Resources: []string{
-										"arn:aws:ec2:*:*:instance/someinstanceid",
-										"arn:aws:ec2:*:*:instance/someotherinstance",
-									},
-								},
+						Principal: "arn:aws:iam::111122223333:policy/TestPolicy",
+						Statements: []Statement{
+							{
+								Effect:   "Allow",
+								Actions:  []string{"ec2:CreateInstance"},
+								Resources: []string{"arn:aws:ec2:*:*:instance/someinstanceid", "arn:aws:ec2:*:*:instance/someotherinstance"},
 							},
 						},
 					},
 				},
+				boundaries:       make(map[string]*model.BoundaryPolicy),
+				scps:             make([]model.SCPPolicy, 0),
+				resourcePolicies: make(map[string]model.ResourcePolicy),
 			},
 			[]model.AccessControlRule{
 				{
 					Principal: model.Principal{
-						ID: "AWS[arn:aws:iam::111122223333:role/TestRole]",
+						ID: "arn:aws:iam::111122223333:policy/TestPolicy",
 					},
 					Permission: model.Permission{
 						ID: "ec2:CreateInstance",
@@ -68,20 +53,15 @@ func TestBuildACL(t *testing.T) {
 						model.RoleGrant{
 							Grant: model.Grant{
 								Type: "Role",
-								ID:   "arn:aws:iam::111122223333:role/SomeRole",
-							},
-						},
-						model.PolicyGrant{
-							Grant: model.Grant{
-								Type: "Policy",
 								ID:   "arn:aws:iam::111122223333:policy/TestPolicy",
 							},
 						},
 					},
+					UncheckedConditions: nil,
 				},
 				{
 					Principal: model.Principal{
-						ID: "AWS[arn:aws:iam::111122223333:role/TestRole]",
+						ID: "arn:aws:iam::111122223333:policy/TestPolicy",
 					},
 					Permission: model.Permission{
 						ID: "ec2:CreateInstance",
@@ -93,58 +73,37 @@ func TestBuildACL(t *testing.T) {
 						model.RoleGrant{
 							Grant: model.Grant{
 								Type: "Role",
-								ID:   "arn:aws:iam::111122223333:role/SomeRole",
-							},
-						},
-						model.PolicyGrant{
-							Grant: model.Grant{
-								Type: "Policy",
 								ID:   "arn:aws:iam::111122223333:policy/TestPolicy",
 							},
 						},
 					},
+					UncheckedConditions: nil,
 				},
 			},
 		},
 		{
 			"two actions",
 			fields{
-				types.Role{
-					Arn:      aws.String("arn:aws:iam::111122223333:role/SomeRole"),
-					RoleName: aws.String("SomeRole"),
-				},
-				[]Principal{
+				identityPolicies: []model.IdentityPolicy{
 					{
-						Type: AWS,
-						ID:   "arn:aws:iam::111122223333:role/TestRole",
-					},
-				},
-				[]IdentityPolicy{
-					{
-						ARN:  "arn:aws:iam::111122223333:policy/TestPolicy",
-						Name: "TestPolicy",
-						Policy: Policy{
-							Version: "2012-10-17",
-							Statements: []Statement{
-								{
-									Effect: "Allow",
-									Actions: []string{
-										"ec2:CreateInstance",
-										"ec2:DescribeInstance",
-									},
-									Resources: []string{
-										"arn:aws:ec2:*:*:instance/someinstanceid",
-									},
-								},
+						Principal: "arn:aws:iam::111122223333:policy/TestPolicy",
+						Statements: []Statement{
+							{
+								Effect:   "Allow",
+								Actions:  []string{"ec2:CreateInstance", "ec2:DescribeInstance"},
+								Resources: []string{"arn:aws:ec2:*:*:instance/someinstanceid"},
 							},
 						},
 					},
 				},
+				boundaries:       make(map[string]*model.BoundaryPolicy),
+				scps:             make([]model.SCPPolicy, 0),
+				resourcePolicies: make(map[string]model.ResourcePolicy),
 			},
 			[]model.AccessControlRule{
 				{
 					Principal: model.Principal{
-						ID: "AWS[arn:aws:iam::111122223333:role/TestRole]",
+						ID: "arn:aws:iam::111122223333:policy/TestPolicy",
 					},
 					Permission: model.Permission{
 						ID: "ec2:CreateInstance",
@@ -156,20 +115,15 @@ func TestBuildACL(t *testing.T) {
 						model.RoleGrant{
 							Grant: model.Grant{
 								Type: "Role",
-								ID:   "arn:aws:iam::111122223333:role/SomeRole",
-							},
-						},
-						model.PolicyGrant{
-							Grant: model.Grant{
-								Type: "Policy",
 								ID:   "arn:aws:iam::111122223333:policy/TestPolicy",
 							},
 						},
 					},
+					UncheckedConditions: nil,
 				},
 				{
 					Principal: model.Principal{
-						ID: "AWS[arn:aws:iam::111122223333:role/TestRole]",
+						ID: "arn:aws:iam::111122223333:policy/TestPolicy",
 					},
 					Permission: model.Permission{
 						ID: "ec2:DescribeInstance",
@@ -181,28 +135,19 @@ func TestBuildACL(t *testing.T) {
 						model.RoleGrant{
 							Grant: model.Grant{
 								Type: "Role",
-								ID:   "arn:aws:iam::111122223333:role/SomeRole",
-							},
-						},
-						model.PolicyGrant{
-							Grant: model.Grant{
-								Type: "Policy",
 								ID:   "arn:aws:iam::111122223333:policy/TestPolicy",
 							},
 						},
 					},
+					UncheckedConditions: nil,
 				},
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := NewACLBuilder(
-				tt.fields.role,
-				tt.fields.principals,
-				tt.fields.policies,
-			).Build()
-			require.Equal(t, result, tt.want)
+			result := NewACLBuilderWithPolicies(tt.fields.identityPolicies, tt.fields.boundaries, tt.fields.scps, tt.fields.resourcePolicies).Build()
+			require.Equal(t, tt.want, result)
 		})
 	}
 }

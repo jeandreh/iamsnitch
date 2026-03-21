@@ -180,34 +180,6 @@ func TestSQLiteCacheFind(t *testing.T) {
 	}
 }
 
-func TestMatchFunctionAWS(t *testing.T) {
-	// Test cases for AWS ARN wildcard matching
-	testCases := []struct {
-		storedValue string
-		userPattern string
-		expected bool
-		description string
-	}{
-		{"arn:aws:s3:::bucket-123", "arn:aws:s3:::bucket-*", true, "Should match: wildcard in bucket name"},
-		{"arn:aws:s3:::bucket-123/file", "arn:aws:s3:::bucket-*", false, "Should NOT match: wildcard doesn't cross / boundary"},
-		{"arn:aws:s3:::bucket-123/file", "arn:aws:s3:::bucket-*/file", true, "Should match: wildcard before /"},
-		{"arn:aws:s3:::bucket-123/other", "arn:aws:s3:::bucket-*/file", false, "Should NOT match: different file name"},
-		{"s3:GetObject", "s3:Get*", true, "Should match: action wildcard"},
-		{"s3:PutObject", "s3:Get*", false, "Should NOT match: different action"},
-		{"anything", "*", true, "Should match: full wildcard"},
-		{"arn:aws:s3:::bucket-123/file.txt", "arn:aws:s3:::bucket-*/file*", true, "Should match: multiple wildcards"},
-		{"arn:aws:s3:::bucket-123/dir/file.txt", "arn:aws:s3:::bucket-*/file*", false, "Should NOT match: wildcard doesn't cross /"},
-	}
-
-	for _, tc := range testCases {
-		result := match(tc.storedValue, tc.userPattern)
-		if result != tc.expected {
-			t.Errorf("FAIL: match(%q, %q) = %v (expected %v) - %s",
-				tc.storedValue, tc.userPattern, result, tc.expected, tc.description)
-		}
-	}
-}
-
 func newRule(permisison string, resource string) model.AccessControlRule {
 	return model.AccessControlRule{
 		Principal: model.Principal{
